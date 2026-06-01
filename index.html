@@ -526,6 +526,10 @@
     State.goldRushActive     = { white: false, black: false };
     State.lastAIMove         = null;   // tracks AI's most recent move to prevent oscillation
     State.rerollCount        = 0;      // resets each turn; drives escalating reroll cost
+    // Board orientation: flipped = black's view (black pieces at bottom)
+    // vsAI: fixed so human's pieces are always at bottom
+    // twoPlayer: starts white-side-down, flips each turn
+    State.boardFlipped       = mode === 'vsAI' && humanColor === 'black';
     Anim.particles           = [];
     Anim.floatingTexts       = [];
     Anim.effects             = [];
@@ -587,10 +591,11 @@
 
   coinFloat(row, col, text) {
     const { SQ } = Render;
+    const { x, y } = Render.vp(row, col);
     this.floatingTexts.push({
       text,
-      x: col * SQ + SQ / 2,
-      y: row * SQ + SQ / 2,
+      x: x + SQ / 2,
+      y: y + SQ / 2,
       start: performance.now(),
       duration: 900,
     });
@@ -598,7 +603,7 @@
 
   captureFlash(row, col) {
     const { SQ } = Render;
-    const cx = col * SQ, cy = row * SQ;
+    const { x: cx, y: cy } = Render.vp(row, col);
     // Burst particles
     for (let i = 0; i < 10; i++) {
       const angle = (i / 10) * Math.PI * 2;
@@ -626,7 +631,7 @@
 
   shieldBreak(row, col) {
     const { SQ } = Render;
-    const cx = col * SQ, cy = row * SQ;
+    const { x: cx, y: cy } = Render.vp(row, col);
     for (let i = 0; i < 8; i++) {
       const angle = (i / 8) * Math.PI * 2;
       const speed = 2 + Math.random() * 3;
@@ -652,8 +657,9 @@
 
   upgradeApplied(row, col, kind) {
     const { SQ } = Render;
-    const cx = col * SQ + SQ / 2;
-    const cy = row * SQ + SQ / 2;
+    const { x: _ux, y: _uy } = Render.vp(row, col);
+    const cx = _ux + SQ / 2;
+    const cy = _uy + SQ / 2;
     const startTime = performance.now();
     const colors = { shield: '#c8960c', extraMove: '#5a8030', captureBonus: '#a06020' };
     const ringColor = colors[kind] || '#f5c542';
@@ -699,7 +705,7 @@
 
   trapTrigger(row, col) {
     const { SQ } = Render;
-    const cx = col * SQ, cy = row * SQ;
+    const { x: cx, y: cy } = Render.vp(row, col);
     for (let i = 0; i < 12; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 1.5 + Math.random() * 3;
@@ -717,7 +723,7 @@
   checkPulse(king) {
     if (!king) return;
     const { SQ } = Render;
-    const cx = king.col * SQ, cy = king.row * SQ;
+    const { x: cx, y: cy } = Render.vp(king.row, king.col);
     this.effects.push({
       start: performance.now(), duration: 800,
       draw(ctx, progress) {
@@ -2122,16 +2128,25 @@ self.onmessage=function(e){
       this.canvas.height = this.SQ * 8;
     },
 
-    // Convert board row/col to canvas x/y (top-left of square)
-    toXY(row, col) {
-      return { x: col * this.SQ, y: row * this.SQ };
+    // Convert board row/col to canvas pixel position, respecting flip
+    vp(row, col) {
+      const { SQ } = this;
+      if (State.boardFlipped) return { x: (7 - col) * SQ, y: (7 - row) * SQ };
+      return { x: col * SQ, y: row * SQ };
     },
 
-    // Convert canvas x/y to board row/col
+    // Convert board row/col to canvas x/y (top-left of square)
+    toXY(row, col) {
+      return this.vp(row, col);
+    },
+
+    // Convert canvas x/y to board row/col (inverts flip if active)
     toRC(x, y) {
+      const rawRow = Math.min(7, Math.floor(y / this.SQ));
+      const rawCol = Math.min(7, Math.floor(x / this.SQ));
       return {
-        row: Math.min(7, Math.floor(y / this.SQ)),
-        col: Math.min(7, Math.floor(x / this.SQ)),
+        row: State.boardFlipped ? 7 - rawRow : rawRow,
+        col: State.boardFlipped ? 7 - rawCol : rawCol,
       };
     },
 
@@ -2143,7 +2158,8 @@ self.onmessage=function(e){
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
           ctx.fillStyle = (r + c) % 2 === 0 ? LIGHT : DARK;
-          ctx.fillRect(c * SQ, r * SQ, SQ, SQ);
+          const { x, y } = this.vp(r, c);
+          ctx.fillRect(x, y, SQ, SQ);
         }
       }
     },
@@ -2155,29 +2171,31 @@ self.onmessage=function(e){
       // Selected square
       if (State.selected) {
         const { row, col } = State.selected;
+        const { x: sx, y: sy } = this.vp(row, col);
         ctx.fillStyle = 'rgba(245,197,66,0.5)';
-        ctx.fillRect(col * SQ, row * SQ, SQ, SQ);
+        ctx.fillRect(sx, sy, SQ, SQ);
       }
 
       // Valid move dots
       for (const m of State.validMoves) {
+        const { x: mx, y: my } = this.vp(m.row, m.col);
         const hasEnemy = State.board[m.row][m.col] !== null;
         if (hasEnemy) {
           // Capture highlight — red tint
           ctx.fillStyle = 'rgba(200,60,20,0.35)';
-          ctx.fillRect(m.col * SQ, m.row * SQ, SQ, SQ);
+          ctx.fillRect(mx, my, SQ, SQ);
         } else {
           // Move dot
           ctx.fillStyle = 'rgba(245,197,66,0.6)';
           ctx.beginPath();
-          ctx.arc(m.col * SQ + SQ / 2, m.row * SQ + SQ / 2, 8, 0, Math.PI * 2);
+          ctx.arc(mx + SQ / 2, my + SQ / 2, 8, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
       // Trap tiles
       for (const trap of State.traps) {
-        const x = trap.col * SQ, y = trap.row * SQ;
+        const { x, y } = this.vp(trap.row, trap.col);
         ctx.fillStyle = 'rgba(140,20,10,0.35)';
         ctx.fillRect(x, y, SQ, SQ);
         ctx.strokeStyle = '#8a2010';
@@ -2197,6 +2215,25 @@ self.onmessage=function(e){
       for (let i = 0; i <= 8; i++) {
         ctx.beginPath(); ctx.moveTo(i * SQ, 0); ctx.lineTo(i * SQ, SQ * 8); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(0, i * SQ); ctx.lineTo(SQ * 8, i * SQ); ctx.stroke();
+      }
+    },
+
+    updateCoordLabels() {
+      const files = State.boardFlipped
+        ? ['h','g','f','e','d','c','b','a']
+        : ['a','b','c','d','e','f','g','h'];
+      const ranks = State.boardFlipped
+        ? ['1','2','3','4','5','6','7','8']
+        : ['8','7','6','5','4','3','2','1'];
+      const cells = document.querySelectorAll('.coord-cell');
+      for (let i = 0; i < 8; i++) {
+        cells[i].textContent     = files[i];  // top row
+        cells[i + 8].textContent = files[i];  // bottom row
+      }
+      const spans = document.querySelectorAll('.coord-side span');
+      for (let i = 0; i < 8; i++) {
+        spans[i].textContent     = ranks[i];  // left side
+        spans[i + 8].textContent = ranks[i];  // right side
       }
     },
 
@@ -2703,13 +2740,13 @@ self.onmessage=function(e){
 
     drawAllPieces() {
       if (!State.board) return;
-      const { SQ } = this;
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
           const piece = State.board[r][c];
           if (!piece) continue;
-          this.drawPiece(piece, c * SQ, r * SQ);
-          if (piece.buffs.length > 0) this.drawBuffOverlays(piece, c * SQ, r * SQ);
+          const { x, y } = this.vp(r, c);
+          this.drawPiece(piece, x, y);
+          if (piece.buffs.length > 0) this.drawBuffOverlays(piece, x, y);
         }
       }
     },
@@ -2724,6 +2761,7 @@ self.onmessage=function(e){
       Economy.rollShop('white');
       Economy.rollShop('black');
       UI.showGame();
+      Render.updateCoordLabels();
       // Update panel labels to show which side the human controls
       if (mode === 'vsAI') {
         document.getElementById('white-label').textContent =
@@ -2954,6 +2992,11 @@ self.onmessage=function(e){
       State.turn = Chess.opponent(current);
       State.movesMadeThisTurn = 0;
       State.rerollCount = 0;  // reset escalating cost for the new player's turn
+      // In 2-player mode flip the board so the current player's pieces are at the bottom
+      if (State.mode === 'twoPlayer') {
+        State.boardFlipped = State.turn === 'black';
+        Render.updateCoordLabels();
+      }
       // Roll fresh shop for the player whose turn is starting
       Economy.rollShop(State.turn);
       UI.updateHUD();
