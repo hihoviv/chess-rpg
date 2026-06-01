@@ -1,0 +1,2974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Chess RPG</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <!-- Chess.js 0.10.3 — authoritative rules engine for legal moves, check, checkmate -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.js"></script>
+  <style>
+    /* === RESET & BASE === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0c0a06;
+      color: #e0d4a0;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+      gap: 8px;
+      user-select: none;
+    }
+
+    /* === SCANLINES === */
+    .scanlines {
+      position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+      background: repeating-linear-gradient(
+        to bottom, transparent, transparent 2px,
+        rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px
+      );
+    }
+
+    /* === SCREENS === */
+    .screen { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    [hidden] { display: none !important; }
+
+    /* === TOP BAR === */
+    #topbar {
+      width: 880px;
+      background: #110e04; border: 2px solid #3a2e08;
+      padding: 8px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    #topbar .title { color: #f5c542; font-size: 14px; letter-spacing: 2px; text-shadow: 2px 2px #7a5e00; }
+    #topbar .turn-info { font-size: 8px; color: #6a5820; }
+    #topbar .turn-info .active { color: #f5c542; }
+
+    /* === MAIN ROW === */
+    #main-row { display: flex; gap: 10px; width: 880px; align-items: flex-start; }
+
+    /* === PLAYER PANELS === */
+    .player-panel { width: 180px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+    .pbox { background: #110e04; border: 2px solid #2a2206; padding: 10px; }
+    .pbox.active-player { border-color: #f5c542; box-shadow: 0 0 10px #f5c54222; }
+    .pbox h3 { font-size: 7px; color: #6a5820; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #1a1606; }
+    .pbox.active-player h3 { color: #f5c542; }
+
+    /* Wallet */
+    .coin-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+    .coin-icon {
+      width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+      background: radial-gradient(circle at 35% 35%, #ffe066, #c8960c);
+      border: 2px solid #7a5e00;
+    }
+    .gold-amt { color: #f5c542; font-size: 12px; }
+
+    /* Buff list */
+    .buff-list { font-size: 6px; line-height: 2; color: #4a3e18; }
+    .buff-list .b-shield { color: #c8960c; }
+    .buff-list .b-move   { color: #8a7030; }
+    .buff-list .b-temp   { color: #a06020; }
+
+    /* Captured pieces */
+    .cap-row { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+    .cap-piece { width: 18px; height: 18px; background: #1a1506; border: 1px solid #2a2206; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+
+    /* Move log */
+    .move-log { font-size: 6px; color: #4a3e18; line-height: 1.9; }
+    .move-log .latest { color: #8a7030; }
+
+    /* Resign */
+    .resign-btn {
+      width: 100%; background: #1a0a06; border: 2px solid #6a1a10;
+      color: #a03020; font-family: 'Press Start 2P', monospace;
+      font-size: 7px; padding: 7px 4px; cursor: pointer; letter-spacing: 1px;
+    }
+    .resign-btn:hover { background: #2a0a06; border-color: #c03020; }
+
+    /* === BOARD COLUMN === */
+    #board-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+
+    /* Board coordinates */
+    .coord-row { display: flex; align-items: center; }
+    .coord-cell { width: 52px; height: 16px; text-align: center; line-height: 16px; font-size: 6px; color: #3a2e08; }
+    .coord-side { display: flex; flex-direction: column; }
+    .coord-side span { width: 16px; height: 52px; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #3a2e08; }
+    .coord-corner { width: 16px; height: 16px; }
+
+    #board-frame { border: 3px solid #2a2206; position: relative; background: #0c0a06; }
+    canvas#board { display: block; image-rendering: pixelated; }
+
+    /* === SHOP === */
+    #shop-wrapper { width: 100%; position: relative; }
+    #shop-overlay {
+      position: absolute; inset: 0; z-index: 5;
+      background: rgba(12,10,6,0.78);
+      border: 2px solid #2a1e04;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 7px; color: #4a3a10; letter-spacing: 1px;
+    }
+    #shop-overlay span { border: 2px solid #3a2e08; padding: 8px 16px; background: #0c0a06; }
+    #shop-panel { background: #110e04; border: 2px solid #2a2206; padding: 10px 14px; }
+    #shop-panel .shop-header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 6px; border-bottom: 1px solid #1a1606; margin-bottom: 8px; }
+    #shop-panel .shop-header h3 { font-size: 8px; color: #f5c542; margin: 0; }
+    #btn-reroll { background: #1a1200; border: 1px solid #3a2e08; color: #8a7040; font-family: inherit; font-size: 6px; padding: 4px 8px; cursor: pointer; }
+    #btn-reroll:hover:not(:disabled) { border-color: #f5c542; color: #f5c542; }
+    #btn-reroll:disabled { opacity: 0.35; cursor: default; }
+    .shop-section-label { font-size: 5px; color: #4a3a10; text-transform: uppercase; letter-spacing: 2px; margin: 6px 0 4px; }
+    .shop-section-label.special { color: #6a3a90; }
+    .shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .shop-item { background: #0c0a06; border: 1px solid #2a2206; padding: 7px 8px; cursor: pointer; }
+    .shop-item:hover:not(.disabled) { border-color: #f5c542; }
+    .shop-item.disabled { opacity: 0.4; cursor: default; }
+    .shop-item.selected { border-color: #f5c542; background: #1a1506; }
+    .shop-item.sold { opacity: 0.35; cursor: not-allowed; }
+    .shop-item.sold .item-name { text-decoration: line-through; }
+    .shop-item.sold .item-cost { color: #5a4818 !important; }
+    .shop-item.special-item { border-color: #3a1a50; }
+    .shop-item.special-item:hover:not(.disabled) { border-color: #c060ff; }
+    .item-cat  { font-size: 5px; color: #4a3a10; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+    .item-cat.special { color: #6a3a90; }
+    .item-name { font-size: 7px; color: #c8a030; margin-bottom: 3px; }
+    .shop-item.special-item .item-name { color: #c060ff; }
+    .item-desc { font-size: 5px; color: #4a3820; line-height: 1.7; margin-bottom: 3px; }
+    .item-cost { font-size: 7px; color: #f5c542; display: flex; align-items: center; gap: 4px; }
+
+    /* === END TURN BUTTON === */
+    #end-turn-btn {
+      display: block; margin: 0 auto;
+      background: #1a1506; border: 2px solid #f5c542;
+      color: #f5c542; font-family: 'Press Start 2P', monospace;
+      font-size: 8px; padding: 10px 24px; cursor: pointer; letter-spacing: 2px;
+    }
+    #end-turn-btn:hover { background: #2a2010; }
+    #end-turn-btn:disabled { border-color: #3a2e08; color: #3a2e08; cursor: default; background: #110e04; }
+
+    /* === STATUS BAR === */
+    #statusbar {
+      width: 880px; background: #110e04; border: 2px solid #2a2206;
+      padding: 10px 14px; font-size: 10px; color: #8a7040;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    #statusbar .ev { color: #f5c542; text-shadow: 0 0 8px #a07820; }
+
+    /* === TOOLTIP === */
+    #tooltip {
+      position: fixed; z-index: 1000;
+      background: #0c0a06; border: 2px solid #f5c542;
+      padding: 8px 10px; font-size: 6px; width: 150px;
+      box-shadow: 3px 3px 0 #000; pointer-events: none;
+    }
+    #tooltip .tt-name { color: #f5c542; font-size: 7px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #1a1606; }
+    .tt-buff { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; color: #6a5820; }
+    .tt-icon { width: 9px; height: 9px; border: 1px solid #3a2e08; flex-shrink: 0; }
+    .tt-icon.shield { background: #c8960c; }
+    .tt-icon.extraMove { background: #5a8030; }
+    .tt-icon.captureBonus { background: #a06020; }
+    .tt-turns { color: #c8960c; margin-left: auto; }
+
+    /* === CONTEXT MENU === */
+    #context-menu {
+      position: fixed; z-index: 1001;
+      background: #0c0a06; border: 2px solid #f5c542;
+      min-width: 160px; box-shadow: 3px 3px 0 #000;
+    }
+    #context-menu .cm-title { font-size: 7px; color: #f5c542; padding: 8px 10px; border-bottom: 1px solid #1a1606; }
+    .cm-item { padding: 7px 10px; cursor: pointer; font-size: 7px; color: #c8a030; display: flex; justify-content: space-between; gap: 10px; }
+    .cm-item:hover:not(.disabled) { background: #1a1506; }
+    .cm-item.disabled { color: #3a2e08; cursor: default; }
+    .cm-item .cm-cost { color: #f5c542; }
+    .cm-item.disabled .cm-cost { color: #3a2e08; }
+
+    /* === MODALS === */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 2000;
+      background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-box { background: #110e04; border: 3px solid #f5c542; padding: 24px; min-width: 320px; text-align: center; }
+    .modal-box h2 { font-size: 12px; color: #f5c542; margin-bottom: 16px; }
+    .modal-box p  { font-size: 7px; color: #8a7030; margin-bottom: 20px; line-height: 2; }
+    .modal-btn {
+      background: #1a1506; border: 2px solid #f5c542; color: #f5c542;
+      font-family: 'Press Start 2P', monospace; font-size: 8px;
+      padding: 10px 20px; cursor: pointer; margin: 4px;
+    }
+    .modal-btn:hover { background: #2a2010; }
+
+    /* Promotion modal */
+    #promo-modal .promo-grid { display: flex; gap: 10px; justify-content: center; margin-bottom: 12px; }
+    .promo-btn { background: #0c0a06; border: 2px solid #3a2e08; padding: 12px; cursor: pointer; font-size: 24px; }
+    .promo-btn:hover { border-color: #f5c542; }
+
+    /* === MAIN MENU === */
+    #screen-menu {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 80vh; gap: 20px;
+    }
+    .menu-title { font-size: 22px; color: #f5c542; text-shadow: 3px 3px #7a5e00; letter-spacing: 4px; margin-bottom: 10px; }
+    .menu-subtitle { font-size: 8px; color: #6a5820; letter-spacing: 2px; margin-bottom: 30px; }
+    .menu-btn {
+      background: #110e04; border: 2px solid #5a4820; color: #c8a030;
+      font-family: 'Press Start 2P', monospace; font-size: 10px;
+      padding: 14px 32px; cursor: pointer; letter-spacing: 2px; width: 260px; text-align: center;
+    }
+    .menu-btn:hover { border-color: #f5c542; color: #f5c542; background: #1a1506; }
+    .diff-row { display: flex; gap: 8px; }
+    .diff-btn {
+      background: #0c0a06; border: 2px solid #3a2e08; color: #6a5820;
+      font-family: 'Press Start 2P', monospace; font-size: 8px;
+      padding: 10px 16px; cursor: pointer;
+    }
+    .diff-btn:hover { border-color: #f5c542; color: #f5c542; }
+
+    /* === COIN BOOST SHIMMER === */
+    @keyframes shimmer {
+      0%   { box-shadow: 0 0 6px #f5c54244; }
+      50%  { box-shadow: 0 0 18px #f5c54288, 0 0 6px #f5c542cc; }
+      100% { box-shadow: 0 0 6px #f5c54244; }
+    }
+    #board-frame.coin-boost { animation: shimmer 1.2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div class="scanlines"></div>
+
+  <!-- ═══ MAIN MENU ═══ -->
+  <div id="screen-menu">
+    <div class="menu-title">♟ CHESS RPG</div>
+    <div class="menu-subtitle">UPGRADES · COINS · TACTICS</div>
+    <button class="menu-btn" id="btn-vsai">VS AI</button>
+    <div class="diff-row" id="diff-row">
+      <button class="diff-btn" data-diff="easy">EASY</button>
+      <button class="diff-btn" data-diff="medium">MEDIUM</button>
+      <button class="diff-btn" data-diff="hard">HARD</button>
+    </div>
+    <button class="menu-btn" id="btn-2p">2 PLAYER</button>
+    <button class="menu-btn" id="btn-settings" style="font-size:8px; padding:10px 32px;">SETTINGS</button>
+  </div>
+
+  <!-- ═══ SETTINGS OVERLAY ═══ -->
+  <div id="settings-modal" class="modal-overlay" hidden>
+    <div class="modal-box">
+      <h2>SETTINGS</h2>
+      <p id="sound-label">SOUND: ON</p>
+      <button class="modal-btn" id="btn-toggle-sound">TOGGLE SOUND</button>
+      <br>
+      <button class="modal-btn" id="btn-close-settings">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ═══ GAME SCREEN ═══ -->
+  <div id="screen-game" class="screen" hidden>
+
+    <!-- Top bar -->
+    <div id="topbar">
+      <div class="title">♟ CHESS RPG</div>
+      <div class="turn-info" id="turn-info">TURN <span class="active" id="turn-num">1</span> · <span class="active" id="turn-color">WHITE'S TURN</span></div>
+      <div class="turn-info" id="mode-info">VS AI (MEDIUM)</div>
+    </div>
+
+    <!-- Main row -->
+    <div id="main-row">
+
+      <!-- White panel -->
+      <div class="player-panel" id="panel-white">
+        <div class="pbox" id="pbox-white">
+          <h3 id="white-label">WHITE PLAYER</h3>
+          <div class="coin-row"><div class="coin-icon"></div><span class="gold-amt" id="wallet-white">0g</span></div>
+          <div class="buff-list" id="buffs-white">No active buffs</div>
+        </div>
+        <div class="pbox">
+          <h3>CAPTURED</h3>
+          <div class="cap-row" id="captured-white"></div>
+        </div>
+        <div class="pbox">
+          <h3>MOVES</h3>
+          <div class="move-log" id="log-white"></div>
+        </div>
+        <button class="resign-btn" id="resign-white">⚑ RESIGN</button>
+      </div>
+
+      <!-- Board column -->
+      <div id="board-col">
+        <!-- Coordinate labels top -->
+        <div class="coord-row">
+          <div class="coord-corner"></div>
+          <div class="coord-cell">a</div><div class="coord-cell">b</div><div class="coord-cell">c</div><div class="coord-cell">d</div>
+          <div class="coord-cell">e</div><div class="coord-cell">f</div><div class="coord-cell">g</div><div class="coord-cell">h</div>
+          <div class="coord-corner"></div>
+        </div>
+        <div style="display:flex; align-items:flex-start;">
+          <div class="coord-side">
+            <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+          </div>
+          <div id="board-frame">
+            <canvas id="board" width="416" height="416"></canvas>
+          </div>
+          <div class="coord-side">
+            <span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span>
+          </div>
+        </div>
+        <!-- Coordinate labels bottom -->
+        <div class="coord-row">
+          <div class="coord-corner"></div>
+          <div class="coord-cell">a</div><div class="coord-cell">b</div><div class="coord-cell">c</div><div class="coord-cell">d</div>
+          <div class="coord-cell">e</div><div class="coord-cell">f</div><div class="coord-cell">g</div><div class="coord-cell">h</div>
+          <div class="coord-corner"></div>
+        </div>
+
+        <!-- Shop -->
+        <div id="shop-wrapper">
+          <div id="shop-overlay"><span>🔒 SHOP — NOT YOUR TURN</span></div>
+          <div id="shop-panel">
+            <div class="shop-header">
+              <h3 id="shop-title">🛒 SHOP</h3>
+              <button id="btn-reroll" disabled>🎲 REROLL (10g)</button>
+            </div>
+            <div class="shop-section-label">— EQUIPMENT —</div>
+            <div class="shop-grid" id="shop-grid-classic"><!-- Populated by JS --></div>
+            <div class="shop-section-label special">— EXCLUSIVES —</div>
+            <div class="shop-grid" id="shop-grid-special"><!-- Populated by JS --></div>
+          </div>
+        </div>
+
+        <!-- End Turn -->
+        <button id="end-turn-btn" disabled>END TURN</button>
+      </div>
+
+      <!-- Black panel -->
+      <div class="player-panel" id="panel-black">
+        <div class="pbox" id="pbox-black">
+          <h3 id="black-label">BLACK PLAYER</h3>
+          <div class="coin-row"><div class="coin-icon"></div><span class="gold-amt" id="wallet-black">0g</span></div>
+          <div class="buff-list" id="buffs-black">No active buffs</div>
+        </div>
+        <div class="pbox">
+          <h3>CAPTURED</h3>
+          <div class="cap-row" id="captured-black"></div>
+        </div>
+        <div class="pbox">
+          <h3>MOVES</h3>
+          <div class="move-log" id="log-black"></div>
+        </div>
+        <button class="resign-btn" id="resign-black">⚑ RESIGN</button>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div id="statusbar">
+      <span class="ev" id="status-event">Game started</span>
+      <span id="status-wallets">white: 0g | black: 0g</span>
+      <span id="status-check"></span>
+    </div>
+  </div>
+
+  <!-- ═══ FLOATING UI ═══ -->
+  <div id="tooltip" hidden>
+    <div class="tt-name" id="tt-name"></div>
+    <div id="tt-buffs"></div>
+  </div>
+
+  <div id="context-menu" hidden>
+    <div class="cm-title" id="cm-title"></div>
+    <div id="cm-items"></div>
+  </div>
+
+  <!-- ═══ MODALS ═══ -->
+  <div id="promo-modal" class="modal-overlay" hidden>
+    <div class="modal-box">
+      <h2>PAWN PROMOTION</h2>
+      <p>Choose a piece</p>
+      <div class="promo-grid">
+        <button class="promo-btn" data-type="queen">♛</button>
+        <button class="promo-btn" data-type="rook">♜</button>
+        <button class="promo-btn" data-type="bishop">♝</button>
+        <button class="promo-btn" data-type="knight">♞</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gameover-modal" class="modal-overlay" hidden>
+    <div class="modal-box">
+      <h2 id="go-title">CHECKMATE!</h2>
+      <p id="go-body"></p>
+      <button class="modal-btn" id="btn-play-again">PLAY AGAIN</button>
+      <button class="modal-btn" id="btn-main-menu">MAIN MENU</button>
+    </div>
+  </div>
+
+  <script>
+  // ─── CHESS.JS INTEGRATION ────────────────────────────────────
+  // Capture the library before our own `const Chess = {...}` namespace shadows it.
+  const ChessLib = window.Chess;   // chess.js 0.10.3 constructor
+  const cjs      = new ChessLib(); // single live instance — validation & minimax only
+
+  // Coordinate helpers: our [row][col] ↔ chess.js algebraic ('e4')
+  function toAlg(row, col)  { return 'abcdefgh'[col] + (8 - row); }
+  function fromAlg(sq)      { return { row: 8 - parseInt(sq[1]), col: 'abcdefgh'.indexOf(sq[0]) }; }
+
+  // chess.js type chars ↔ our piece type names
+  const CJS_TYPE = { p:'pawn', n:'knight', b:'bishop', r:'rook', q:'queen', k:'king' };
+  const OUR_TYPE = { pawn:'p', knight:'n', bishop:'b', rook:'r', queen:'q', king:'k' };
+
+  // Build a FEN string from State.board so chess.js can validate positions
+  function boardToFen(board, turn, castlingRights, enPassantTarget) {
+    let placement = '';
+    for (let r = 0; r < 8; r++) {
+      let empty = 0;
+      for (let c = 0; c < 8; c++) {
+        const p = board[r][c];
+        if (!p) { empty++; }
+        else {
+          if (empty) { placement += empty; empty = 0; }
+          const sym = OUR_TYPE[p.type] || '?';
+          placement += p.color === 'white' ? sym.toUpperCase() : sym;
+        }
+      }
+      if (empty) placement += empty;
+      if (r < 7) placement += '/';
+    }
+    const side   = turn === 'white' ? 'w' : 'b';
+    let castle   = '';
+    if (castlingRights?.white?.k) castle += 'K';
+    if (castlingRights?.white?.q) castle += 'Q';
+    if (castlingRights?.black?.k) castle += 'k';
+    if (castlingRights?.black?.q) castle += 'q';
+    if (!castle) castle = '-';
+    const ep = enPassantTarget ? toAlg(enPassantTarget.row, enPassantTarget.col) : '-';
+    return `${placement} ${side} ${castle} ${ep} 0 1`;
+  }
+
+  // Sync cjs to the current game position (call before any legal-move query)
+  function syncCjs() {
+    const fen = boardToFen(State.board, State.turn, State.castlingRights, State.enPassantTarget);
+    if (!cjs.load(fen)) {
+      // Fallback: strip castling/ep if FEN was somehow rejected
+      cjs.load(boardToFen(State.board, State.turn,
+        { white:{ k:false, q:false }, black:{ k:false, q:false } }, null));
+    }
+  }
+
+  // ─── STATE ───────────────────────────────────────────────────
+  const State = {
+    board: null,
+    turn: 'white',
+    wallets: { white: 0, black: 0 },
+    coinBoostTurns: { white: 0, black: 0 },
+    traps: [],
+    castlingRights: { white: { k: true, q: true }, black: { k: true, q: true } },
+    enPassantTarget: null,
+    selected: null,
+    validMoves: [],         // [{row, col}]
+    movesMadeThisTurn: 0,   // 0 = no move yet; extraMove buff allows up to 2
+    mode: 'vsAI',
+    difficulty: 'medium',
+    phase: 'menu',          // 'menu' | 'playing' | 'gameover'
+    winner: null,
+    animations: [],         // [{kind, ...params, startTime}]
+    eventLog: [],
+    moveHistory: [],        // [{from, to, piece, captured, notation}]
+    pendingUpgrade: null,   // {color, row, col} during pawn promotion
+    soundEnabled: true,
+    moveCount: 0,
+    capturedPieces: { white: [], black: [] },
+    shop: { white: { classic: [], special: [] }, black: { classic: [], special: [] } },
+    blitzActive: { white: false, black: false },
+    goldRushActive: { white: false, black: false },
+  };
+
+  // piece: { type, color, buffs: [{kind, turnsLeft, appliedAt}] }
+  // buff kinds: 'shield' | 'extraMove' | 'captureBonus'
+  // trap:       { row, col, owner }
+
+  function initBoard() {
+    const b = Array.from({ length: 8 }, () => Array(8).fill(null));
+    const back = ['rook','knight','bishop','queen','king','bishop','knight','rook'];
+    for (let c = 0; c < 8; c++) {
+      b[0][c] = { type: back[c], color: 'black', buffs: [] };
+      b[1][c] = { type: 'pawn',  color: 'black', buffs: [] };
+      b[6][c] = { type: 'pawn',  color: 'white', buffs: [] };
+      b[7][c] = { type: back[c], color: 'white', buffs: [] };
+    }
+    return b;
+  }
+
+  function resetState(mode, difficulty) {
+    // Randomly assign sides in VS AI — human gets white or black 50/50
+    const humanColor = mode === 'vsAI' ? (Math.random() < 0.5 ? 'white' : 'black') : 'white';
+    State.humanColor         = humanColor;
+    State.aiColor            = mode === 'vsAI' ? (humanColor === 'white' ? 'black' : 'white') : null;
+    State.board              = initBoard();
+    State.turn               = 'white';
+    State.wallets            = { white: 0, black: 0 };
+    State.coinBoostTurns     = { white: 0, black: 0 };
+    State.traps              = [];
+    State.castlingRights     = { white: { k: true, q: true }, black: { k: true, q: true } };
+    State.enPassantTarget    = null;
+    State.selected           = null;
+    State.validMoves         = [];
+    State.movesMadeThisTurn  = 0;
+    State.capturedPieces     = { white: [], black: [] };
+    State.mode               = mode;
+    State.difficulty         = difficulty;
+    State.phase              = 'playing';
+    State.winner             = null;
+    State.animations         = [];
+    State.eventLog           = ['Game started'];
+    State.moveHistory        = [];
+    State.pendingUpgrade     = null;
+    State.moveCount          = 0;
+    State.shop               = { white: { classic: [], special: [] }, black: { classic: [], special: [] } };
+    State.blitzActive        = { white: false, black: false };
+    State.goldRushActive     = { white: false, black: false };
+    State.lastAIMove         = null;   // tracks AI's most recent move to prevent oscillation
+    State.rerollCount        = 0;      // resets each turn; drives escalating reroll cost
+    Anim.particles           = [];
+    Anim.floatingTexts       = [];
+    Anim.effects             = [];
+    cjs.reset();             // sync chess.js to standard starting position
+  }
+  // ─── ANIM ────────────────────────────────────────────────────
+  const Anim = {
+  particles: [],
+  floatingTexts: [],
+  effects: [],
+
+  step() {
+    const { ctx, SQ } = Render;
+    const now = performance.now();
+
+    // Floating coin text
+    this.floatingTexts = this.floatingTexts.filter(t => {
+      const age = now - t.start;
+      if (age > t.duration) return false;
+      const progress = age / t.duration;
+      const alpha = 1 - progress;
+      const y = t.y - progress * 36;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#f5c542';
+      ctx.font = 'bold 9px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t.text, t.x, y);
+      ctx.restore();
+      return true;
+    });
+
+    // Particles
+    this.particles = this.particles.filter(p => {
+      const age = now - p.start;
+      if (age > p.duration) return false;
+      const progress = age / p.duration;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.15; // gravity
+      ctx.save();
+      ctx.globalAlpha = 1 - progress;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+      ctx.restore();
+      return true;
+    });
+
+    // Generic effects (flashes, rings)
+    this.effects = this.effects.filter(e => {
+      const age = now - e.start;
+      if (age > e.duration) return false;
+      const progress = age / e.duration;
+      e.draw(ctx, progress, SQ);
+      return true;
+    });
+  },
+
+  coinFloat(row, col, text) {
+    const { SQ } = Render;
+    this.floatingTexts.push({
+      text,
+      x: col * SQ + SQ / 2,
+      y: row * SQ + SQ / 2,
+      start: performance.now(),
+      duration: 900,
+    });
+  },
+
+  captureFlash(row, col) {
+    const { SQ } = Render;
+    const cx = col * SQ, cy = row * SQ;
+    // Burst particles
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 2;
+      this.particles.push({
+        x: cx + SQ / 2, y: cy + SQ / 2,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        color: Math.random() > 0.5 ? '#c83020' : '#f5c542',
+        size: 3 + Math.random() * 3,
+        start: performance.now(), duration: 600,
+      });
+    }
+    // Red flash
+    this.effects.push({
+      start: performance.now(), duration: 200,
+      draw(ctx, progress, SQ) {
+        ctx.save();
+        ctx.globalAlpha = (1 - progress) * 0.6;
+        ctx.fillStyle = '#c03020';
+        ctx.fillRect(cx, cy, SQ, SQ);
+        ctx.restore();
+      },
+    });
+  },
+
+  shieldBreak(row, col) {
+    const { SQ } = Render;
+    const cx = col * SQ, cy = row * SQ;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const speed = 2 + Math.random() * 3;
+      this.particles.push({
+        x: cx + SQ / 2, y: cy + SQ / 2,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        color: '#c8960c', size: 4,
+        start: performance.now(), duration: 700,
+      });
+    }
+    this.effects.push({
+      start: performance.now(), duration: 150,
+      draw(ctx, progress, SQ) {
+        ctx.save();
+        ctx.globalAlpha = (1 - progress) * 0.8;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(cx, cy, SQ, SQ);
+        ctx.restore();
+      },
+    });
+    this.floatingTexts.push({ text: 'SHIELD!', x: cx + SQ/2, y: cy + SQ/2, start: performance.now(), duration: 900 });
+  },
+
+  upgradeApplied(row, col, kind) {
+    const { SQ } = Render;
+    const cx = col * SQ + SQ / 2;
+    const cy = row * SQ + SQ / 2;
+    const startTime = performance.now();
+    const colors = { shield: '#c8960c', extraMove: '#5a8030', captureBonus: '#a06020' };
+    const ringColor = colors[kind] || '#f5c542';
+
+    // Expanding gold ring
+    this.effects.push({
+      start: startTime, duration: 500,
+      draw(ctx, progress) {
+        const radius = progress * SQ * 0.9;
+        ctx.save();
+        ctx.globalAlpha = (1 - progress) * 0.9;
+        ctx.strokeStyle = '#f5c542';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      },
+    });
+
+    // Pulse glow on piece square
+    this.effects.push({
+      start: startTime, duration: 600,
+      draw(ctx, progress) {
+        const scale = progress < 0.4 ? 1 + progress * 0.5 : 1.2 - (progress - 0.4) * 0.34;
+        ctx.save();
+        ctx.globalAlpha = (1 - progress) * 0.5;
+        ctx.fillStyle = ringColor;
+        const hw = SQ * scale / 2;
+        ctx.fillRect(cx - hw, cy - hw, SQ * scale, SQ * scale);
+        ctx.restore();
+      },
+    });
+
+    // Floating label
+    const labels = { shield: 'SHIELD!', extraMove: '+MOVE!', captureBonus: '+CAP!' };
+    this.floatingTexts.push({
+      text: labels[kind] || 'UPGRADE!',
+      x: cx, y: cy,
+      start: startTime, duration: 1000,
+    });
+  },
+
+  trapTrigger(row, col) {
+    const { SQ } = Render;
+    const cx = col * SQ, cy = row * SQ;
+    for (let i = 0; i < 12; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 3;
+      this.particles.push({
+        x: cx + SQ / 2, y: cy + SQ / 2,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        color: Math.random() > 0.5 ? '#8020c0' : '#c060ff',
+        size: 3 + Math.random() * 3,
+        start: performance.now(), duration: 700,
+      });
+    }
+    this.floatingTexts.push({ text: 'TRAPPED!', x: cx + SQ/2, y: cy + SQ/2, start: performance.now(), duration: 900 });
+  },
+
+  checkPulse(king) {
+    if (!king) return;
+    const { SQ } = Render;
+    const cx = king.col * SQ, cy = king.row * SQ;
+    this.effects.push({
+      start: performance.now(), duration: 800,
+      draw(ctx, progress) {
+        const alpha = Math.sin(progress * Math.PI * 3) * 0.5;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.fillStyle = '#c03020';
+        ctx.fillRect(cx, cy, SQ, SQ);
+        ctx.restore();
+      },
+    });
+    // Screen shake — cancel any pending shake before starting a new one
+    const canvas = Render.canvas;
+    (this._shakeTimeouts || []).forEach(id => clearTimeout(id));
+    this._shakeTimeouts = [];
+    const shakes = [3,-3,2,-2,1,0];
+    shakes.forEach((s, i) => {
+      const id = setTimeout(() => {
+        canvas.style.transform = `translate(${s}px, ${s % 2 === 0 ? s : -s}px)`;
+        if (i === shakes.length - 1) canvas.style.transform = '';
+      }, i * 50);
+      this._shakeTimeouts.push(id);
+    });
+  },
+};
+
+
+  // ─── CHESS ───────────────────────────────────────────────────
+  // Rules from chess.js; this namespace keeps helpers + extraMove buff logic.
+  // NOTE: `var` (not `const`) avoids SyntaxError — chess.js already put `var Chess` in
+  // the global scope; re-declaring with `const` is a spec violation caught by Chrome.
+  // ChessLib (captured above) keeps the chess.js constructor; this `var` overwrites
+  // the global `Chess` with our RPG namespace.
+  var Chess = {
+    opponent(color) { return color === 'white' ? 'black' : 'white'; },
+    inBounds(r, c)  { return r >= 0 && r < 8 && c >= 0 && c < 8; },
+
+    hasExtraMove(piece) {
+      return piece?.buffs?.some(b => b.kind === 'extraMove' && b.turnsLeft > 0) ?? false;
+    },
+
+    // Squares only reachable via the extraMove buff (chess.js won't generate these)
+    _extraMoveSqs(piece, row, col) {
+      const extras = [];
+      const opp = this.opponent(piece.color);
+      const can = (r, c) => this.inBounds(r, c) && State.board[r][c]?.color !== piece.color;
+      const add = (r, c) => { if (can(r, c)) extras.push({ row: r, col: c, special: null }); };
+
+      switch (piece.type) {
+        case 'pawn': {
+          const dir = piece.color === 'white' ? -1 : 1;
+          // Allow double push from non-start rows (chess.js only allows it from the start row)
+          if (!State.board[row + dir]?.[col] &&
+              this.inBounds(row + dir * 2, col) && !State.board[row + dir * 2]?.[col]) {
+            extras.push({ row: row + dir * 2, col, special: null });
+          }
+          // Backward diagonal captures
+          for (const dc of [-1, 1]) {
+            const r = row - dir, c = col + dc;
+            if (this.inBounds(r, c) && State.board[r][c]?.color === opp)
+              extras.push({ row: r, col: c, special: null });
+          }
+          break;
+        }
+        case 'knight': {
+          // Extended L-shapes (chess.js only gives the standard 8)
+          const ext = [[3,1],[3,-1],[-3,1],[-3,-1],[1,3],[1,-3],[-1,3],[-1,-3],[2,2],[2,-2],[-2,2],[-2,-2]];
+          for (const [dr, dc] of ext) add(row + dr, col + dc);
+          break;
+        }
+        case 'king': {
+          // 2-square range in all directions (chess.js only gives 1-square + castling)
+          for (let dr = -2; dr <= 2; dr++)
+            for (let dc = -2; dc <= 2; dc++) {
+              if (!dr && !dc) continue;
+              add(row + dr, col + dc);
+            }
+          break;
+        }
+        // Sliders (bishop/rook/queen) already get full range from chess.js — nothing to add
+      }
+      return extras;
+    },
+
+    // Squares reachable by a LEAP-buffed piece that chess.js wouldn't generate
+    // (i.e., squares along the piece's ray that were previously blocked by intermediate pieces)
+    _leapSqs(piece, row, col) {
+      const extras = [];
+      const add = (r, c) => {
+        if (this.inBounds(r, c) && State.board[r][c]?.color !== piece.color)
+          extras.push({ row: r, col: c, special: null });
+      };
+      switch (piece.type) {
+        case 'bishop':
+          for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]])
+            for (let i = 1; i < 8; i++) add(row + dr*i, col + dc*i);
+          break;
+        case 'rook':
+          for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]])
+            for (let i = 1; i < 8; i++) add(row + dr*i, col + dc*i);
+          break;
+        case 'queen':
+          for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]])
+            for (let i = 1; i < 8; i++) add(row + dr*i, col + dc*i);
+          break;
+        case 'pawn': {
+          // Jump to double-push square even if the intermediate square is occupied
+          const dir = piece.color === 'white' ? -1 : 1;
+          const r2 = row + dir * 2;
+          if (this.inBounds(r2, col) && !State.board[r2][col]) add(r2, col);
+          break;
+        }
+        // knight already leaps; king only moves 1 square — nothing extra to add
+      }
+      return extras;
+    },
+
+    // Legal moves for a piece, augmented with extraMove / leap buff squares
+    getLegalMoves(row, col) {
+      const piece = State.board[row][col];
+      if (!piece) return [];
+
+      // Frozen pieces cannot move at all
+      if (piece.buffs?.some(b => b.kind === 'freeze')) return [];
+
+      syncCjs();
+      const raw = cjs.moves({ square: toAlg(row, col), verbose: true });
+
+      // Translate chess.js move objects → our {row, col, special} format
+      const moves = raw.map(m => {
+        const to = fromAlg(m.to);
+        let special = null;
+        if      (m.flags.includes('k')) special = 'castleK';
+        else if (m.flags.includes('q')) special = 'castleQ';
+        else if (m.flags.includes('e')) special = 'enPassant';
+        return { row: to.row, col: to.col, special };
+      });
+
+      // Merge in extraMove buff squares (deduplicated)
+      if (this.hasExtraMove(piece)) {
+        for (const m of this._extraMoveSqs(piece, row, col)) {
+          if (!moves.some(e => e.row === m.row && e.col === m.col)) moves.push(m);
+        }
+      }
+
+      // Merge in leap buff squares — lets the piece jump over blockers
+      if (piece.buffs?.some(b => b.kind === 'leap')) {
+        for (const m of this._leapSqs(piece, row, col)) {
+          if (!moves.some(e => e.row === m.row && e.col === m.col)) moves.push(m);
+        }
+      }
+
+      return moves;
+    },
+
+    // All legal moves for a color — used by AI.
+    // boardParam is either State.board (live game) or a ChessLib clone (minimax).
+    getAllLegalMoves(boardParam, color, _ep, _cr) {
+      // Minimax path: boardParam is a ChessLib instance
+      if (boardParam && typeof boardParam.moves === 'function') {
+        return boardParam.moves({ verbose: true }).map(m => {
+          const from = fromAlg(m.from), to = fromAlg(m.to);
+          let special = null;
+          if      (m.flags.includes('k')) special = 'castleK';
+          else if (m.flags.includes('q')) special = 'castleQ';
+          else if (m.flags.includes('e')) special = 'enPassant';
+          return { fromRow: from.row, fromCol: from.col, row: to.row, col: to.col, special, _raw: m };
+        });
+      }
+      // Live game path
+      syncCjs();
+      const result = cjs.moves({ verbose: true }).map(m => {
+        const from = fromAlg(m.from), to = fromAlg(m.to);
+        let special = null;
+        if      (m.flags.includes('k')) special = 'castleK';
+        else if (m.flags.includes('q')) special = 'castleQ';
+        else if (m.flags.includes('e')) special = 'enPassant';
+        return { fromRow: from.row, fromCol: from.col, row: to.row, col: to.col, special, _raw: m };
+      });
+      // Merge extraMove augmentations for live game
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        const p = State.board[r][c];
+        if (!p || p.color !== color || !this.hasExtraMove(p)) continue;
+        for (const m of this._extraMoveSqs(p, r, c)) {
+          if (!result.some(e => e.fromRow === r && e.fromCol === c && e.row === m.row && e.col === m.col))
+            result.push({ fromRow: r, fromCol: c, ...m });
+        }
+      }
+      return result;
+    },
+
+    // Is `color`'s king in check?
+    // boardParam is State.board (live) or a ChessLib clone (minimax).
+    isInCheck(boardParam, color, ep) {
+      if (boardParam && typeof boardParam.in_check === 'function') {
+        // Minimax: the clone already has a side-to-move; in_check() tests that side
+        return boardParam.in_check();
+      }
+      // Live game: build a temporary FEN with `color` to move and query chess.js
+      const fen = boardToFen(State.board, color, State.castlingRights, ep || null);
+      const tmp = new ChessLib(fen);
+      return tmp ? tmp.in_check() : false;
+    },
+
+    isCheckmate(color) {
+      const fen = boardToFen(State.board, color, State.castlingRights, State.enPassantTarget);
+      const tmp = new ChessLib(fen);
+      return tmp ? tmp.in_checkmate() : false;
+    },
+
+    isStalemate(color) {
+      const fen = boardToFen(State.board, color, State.castlingRights, State.enPassantTarget);
+      const tmp = new ChessLib(fen);
+      return tmp ? tmp.in_stalemate() : false;
+    },
+
+    findKing(board, color) {
+      for (let r = 0; r < 8; r++)
+        for (let c = 0; c < 8; c++)
+          if (State.board[r][c]?.type === 'king' && State.board[r][c]?.color === color)
+            return { row: r, col: c };
+      return null;
+    },
+
+    isPawnPromotion(piece, toRow) {
+      return piece?.type === 'pawn' && (toRow === 0 || toRow === 7);
+    },
+  };
+
+  // ─── UI ──────────────────────────────────────────────────────
+  const UI = {
+    init() {
+      const canvas = document.getElementById('board');
+      canvas.addEventListener('click', e => {
+        if (State.phase !== 'playing') return;
+        if (State.mode === 'vsAI' && State.turn === State.aiColor) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const { row, col } = Render.toRC(x, y);
+        UI.handleBoardClick(row, col);
+      });
+
+      canvas.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (State.phase !== 'playing') return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const { row, col } = Render.toRC(x, y);
+        UI.showContextMenu(row, col, e.clientX, e.clientY);
+      });
+
+      canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const { row, col } = Render.toRC(x, y);
+        UI.handleHover(row, col, e.clientX, e.clientY);
+      });
+      canvas.addEventListener('mouseleave', () => UI.hideTooltip());
+
+      document.addEventListener('click', () => UI.hideContextMenu());
+
+      document.getElementById('end-turn-btn').addEventListener('click', () => Game.endTurn());
+      document.getElementById('resign-white').addEventListener('click', () => Game.resign('white'));
+      document.getElementById('resign-black').addEventListener('click', () => Game.resign('black'));
+      document.getElementById('btn-vsai').addEventListener('click', () => UI.showDiffSelect());
+      document.getElementById('btn-2p').addEventListener('click', () => Game.start('twoPlayer', 'medium'));
+      document.getElementById('btn-settings').addEventListener('click', () => UI.showSettings());
+      document.getElementById('btn-toggle-sound').addEventListener('click', () => {
+        State.soundEnabled = !State.soundEnabled;
+        document.getElementById('sound-label').textContent = 'SOUND: ' + (State.soundEnabled ? 'ON' : 'OFF');
+      });
+      document.getElementById('btn-close-settings').addEventListener('click', () => {
+        document.getElementById('settings-modal').hidden = true;
+      });
+      document.querySelectorAll('.diff-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          Game.start('vsAI', btn.dataset.diff);
+        });
+      });
+      document.getElementById('btn-play-again').addEventListener('click', () => Game.restart());
+      document.getElementById('btn-main-menu').addEventListener('click', () => UI.showMenu());
+
+      document.querySelectorAll('.promo-btn').forEach(btn => {
+        btn.addEventListener('click', () => UI.resolvePromotion(btn.dataset.type));
+      });
+    },
+
+    _pendingPromotion: null,
+
+    handleBoardClick(row, col) {
+      if (this._pendingPromotion) return;  // block input during promotion modal
+      if (State.pendingUpgrade === 'trapTile') {
+        Economy.placeTrap(row, col);
+        State.pendingUpgrade = null;
+        UI.updateShop();
+        return;
+      }
+      // Freeze targets an enemy piece — handle before the generic own-piece handler
+      if (State.pendingUpgrade === 'freeze') {
+        const piece = State.board[row][col];
+        const opp = State.turn === 'white' ? 'black' : 'white';
+        if (piece && piece.color === opp) {
+          Economy.applyUpgrade('freeze', row, col);
+        } else {
+          UI.setStatus('FREEZE cancelled — must click an enemy piece.');
+        }
+        State.pendingUpgrade = null;
+        UI.updateShop();
+        UI.updateHUD();
+        return;
+      }
+      if (State.pendingUpgrade && State.pendingUpgrade !== 'trapTile') {
+        const piece = State.board[row][col];
+        if (piece && piece.color === State.turn) {
+          Economy.applyUpgrade(State.pendingUpgrade, row, col);
+          State.pendingUpgrade = null;
+          UI.updateShop();
+          UI.updateHUD();
+          return;
+        }
+        State.pendingUpgrade = null;
+        UI.updateShop();
+        return;
+      }
+
+      const piece = State.board[row][col];
+
+      if (piece && piece.color === State.turn) {
+        State.selected = { row, col };
+        State.validMoves = Chess.getLegalMoves(row, col);
+        return;
+      }
+
+      if (State.selected) {
+        const move = State.validMoves.find(m => m.row === row && m.col === col);
+        if (move) {
+          const maxMoves = State.blitzActive[State.turn] ? 2 : 1;
+          if (State.movesMadeThisTurn >= maxMoves) {
+            UI.setStatus('You already moved this turn — click END TURN to continue.');
+            return;
+          }
+          Game.executeMove(State.selected.row, State.selected.col, row, col, move.special);
+          return;
+        }
+      }
+
+      State.selected = null;
+      State.validMoves = [];
+    },
+
+    showDiffSelect() {
+      document.getElementById('diff-row').style.display = 'flex';
+    },
+
+    showSettings() {
+      document.getElementById('settings-modal').hidden = false;
+    },
+
+    showMenu() {
+      document.getElementById('screen-game').hidden = true;
+      document.getElementById('screen-menu').hidden = false;
+      document.getElementById('gameover-modal').hidden = true;
+      State.phase = 'menu';
+    },
+
+    showGame() {
+      document.getElementById('screen-menu').hidden = true;
+      document.getElementById('screen-game').hidden = false;
+    },
+
+    showPromoModal(fromRow, fromCol, toRow, toCol, special, captured) {
+      this._pendingPromotion = { fromRow, fromCol, toRow, toCol, special, captured };
+      document.getElementById('promo-modal').hidden = false;
+    },
+
+    resolvePromotion(type) {
+      document.getElementById('promo-modal').hidden = true;
+      const { fromRow, fromCol, toRow, toCol, special, captured } = this._pendingPromotion;
+      State.board[toRow][toCol].type = type;
+      this._pendingPromotion = null;
+      Game.afterMove(fromRow, fromCol, toRow, toCol, captured);
+    },
+
+    showGameOver(winner) {
+      const el = document.getElementById('gameover-modal');
+      const title = document.getElementById('go-title');
+      const body  = document.getElementById('go-body');
+      if (winner === 'draw') {
+        title.textContent = 'STALEMATE!';
+        body.textContent = "It's a draw.\nWhite: " + State.wallets.white + 'g  Black: ' + State.wallets.black + 'g';
+      } else {
+        title.textContent = (winner === 'white' ? 'WHITE' : 'BLACK') + ' WINS!';
+        body.textContent = 'Checkmate!\nWhite: ' + State.wallets.white + 'g  Black: ' + State.wallets.black + 'g';
+      }
+      el.hidden = false;
+    },
+
+    handleHover(row, col, mouseX, mouseY) {
+      if (!Chess.inBounds(row, col) || !State.board) { this.hideTooltip(); return; }
+      const piece = State.board[row][col];
+      if (!piece) { this.hideTooltip(); return; }
+      this.showTooltip(piece, mouseX + 14, mouseY + 14);
+    },
+
+    showTooltip(piece, x, y) {
+      const el = document.getElementById('tooltip');
+      document.getElementById('tt-name').textContent =
+        piece.type.toUpperCase() + ' (' + piece.color + ')';
+      const buffsEl = document.getElementById('tt-buffs');
+      buffsEl.innerHTML = '';
+      if (piece.buffs.length === 0) {
+        buffsEl.innerHTML = '<div style="color:#3a2e08;font-size:6px">No buffs</div>';
+      } else {
+        for (const b of piece.buffs) {
+          const div = document.createElement('div');
+          div.className = 'tt-buff';
+          const icon = document.createElement('span');
+          icon.className = 'tt-icon ' + b.kind;
+          const label = document.createElement('span');
+          label.textContent = b.kind === 'shield' ? 'Shield' : b.kind === 'extraMove' ? '+1 Move' : '+20g Cap';
+          const turns = document.createElement('span');
+          turns.className = 'tt-turns';
+          turns.textContent = b.turnsLeft !== null ? b.turnsLeft + 't' : '∞';
+          div.appendChild(icon); div.appendChild(label); div.appendChild(turns);
+          buffsEl.appendChild(div);
+        }
+      }
+      el.style.left = x + 'px';
+      el.style.top  = y + 'px';
+      el.hidden = false;
+    },
+
+    hideTooltip() {
+      document.getElementById('tooltip').hidden = true;
+    },
+
+    showContextMenu(row, col, mouseX, mouseY) {
+      if (!State.board) return;
+      const piece = State.board[row][col];
+      if (!piece || piece.color !== State.turn) return;
+      if (State.phase !== 'playing') return;
+      const menu = document.getElementById('context-menu');
+      document.getElementById('cm-title').textContent =
+        piece.type.toUpperCase() + ' — UPGRADES';
+      const items = document.getElementById('cm-items');
+      items.innerHTML = '';
+      const upgrades = [
+        { kind: 'shield',       label: 'SHIELD',     cost: 80 },
+        { kind: 'extraMove',    label: 'EXTRA MOVE', cost: 60 },
+        { kind: 'captureBonus', label: 'CAP BONUS',  cost: 40 },
+      ];
+      for (const u of upgrades) {
+        const div = document.createElement('div');
+        const canAfford = State.wallets[State.turn] >= u.cost;
+        div.className = 'cm-item' + (canAfford ? '' : ' disabled');
+        div.innerHTML = `<span>${u.label}</span><span class="cm-cost">${u.cost}g</span>`;
+        if (canAfford) {
+          div.addEventListener('click', e => {
+            e.stopPropagation();
+            Economy.applyUpgrade(u.kind, row, col);
+            UI.hideContextMenu();
+            UI.updateHUD();
+          });
+        }
+        items.appendChild(div);
+      }
+      menu.style.left = mouseX + 'px';
+      menu.style.top  = mouseY + 'px';
+      menu.hidden = false;
+    },
+
+    hideContextMenu() {
+      document.getElementById('context-menu').hidden = true;
+    },
+
+    updateHUD() {
+      if (!State.board) return;
+      document.getElementById('wallet-white').textContent = State.wallets.white + 'g';
+      document.getElementById('wallet-black').textContent = State.wallets.black + 'g';
+      document.getElementById('pbox-white').classList.toggle('active-player', State.turn === 'white');
+      document.getElementById('pbox-black').classList.toggle('active-player', State.turn === 'black');
+      document.getElementById('turn-num').textContent = State.moveCount + 1;
+      document.getElementById('turn-color').textContent = State.turn.toUpperCase() + "'S TURN";
+      UI.renderBuffList('white');
+      UI.renderBuffList('black');
+      document.getElementById('status-wallets').textContent =
+        'white: ' + State.wallets.white + 'g | black: ' + State.wallets.black + 'g';
+      const inCheck = Chess.isInCheck(State.board, State.turn, State.enPassantTarget);
+      document.getElementById('status-check').textContent = inCheck ? '⚠ CHECK!' : '';
+      const myBoost = State.coinBoostTurns[State.turn] > 0;
+      document.getElementById('board-frame').classList.toggle('coin-boost', myBoost);
+      // End Turn enabled only once a move has been made
+      document.getElementById('end-turn-btn').disabled = State.movesMadeThisTurn === 0;
+      const isHumanTurn = State.mode === 'twoPlayer' || State.turn === State.humanColor;
+      document.getElementById('shop-overlay').hidden = isHumanTurn;
+      // In VS AI mode, hide the resign button that belongs to the AI's color
+      document.getElementById('resign-white').hidden =
+        State.mode === 'vsAI' && State.aiColor === 'white';
+      document.getElementById('resign-black').hidden =
+        State.mode === 'vsAI' && State.aiColor === 'black';
+      UI.updateShop();
+    },
+
+    renderBuffList(color) {
+      const el = document.getElementById('buffs-' + color);
+      const lines = [];
+      if (State.coinBoostTurns[color] > 0)
+        lines.push(`<span class="b-shield">■ Coin Boost x1.5 (${State.coinBoostTurns[color]}t)</span>`);
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const p = State.board[r][c];
+          if (p?.color !== color) continue;
+          for (const b of p.buffs) {
+            const label = b.kind === 'shield' ? 'Shield' : b.kind === 'extraMove' ? '+1 Move' : '+20g Cap';
+            const cls   = b.kind === 'shield' ? 'b-shield' : b.kind === 'extraMove' ? 'b-move' : 'b-temp';
+            const turns = b.turnsLeft !== null ? ` (${b.turnsLeft}t)` : '';
+            lines.push(`<span class="${cls}">■ ${p.type} — ${label}${turns}</span>`);
+          }
+        }
+      }
+      el.innerHTML = lines.length ? lines.join('<br>') : 'No active buffs';
+    },
+
+    updateShop() {
+      const classicGrid = document.getElementById('shop-grid-classic');
+      const specialGrid = document.getElementById('shop-grid-special');
+      const wallet = State.wallets[State.turn];
+      const isHumanTurn = State.mode === 'twoPlayer' || State.turn === State.humanColor;
+      const playerShop = State.shop[State.turn] || { classic: [], special: [] };
+
+      // Update shop title
+      const title = document.getElementById('shop-title');
+      if (title) title.textContent = '🛒 ' + State.turn.toUpperCase() + "'S SHOP";
+
+      // Reroll button
+      const rerollBtn = document.getElementById('btn-reroll');
+      if (rerollBtn) {
+        const rerollCost = (State.rerollCount + 1) * 10;
+        rerollBtn.disabled = !isHumanTurn || wallet < rerollCost;
+        rerollBtn.textContent = '🎲 REROLL (' + rerollCost + 'g)';
+        rerollBtn.onclick = () => Economy.rerollShop();
+      }
+
+      const coinIcon = `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#c8960c);border:1px solid #7a5e00;vertical-align:middle"></span>`;
+
+      const renderGrid = (grid, items, isSpecial) => {
+        grid.innerHTML = '';
+        for (const item of items) {
+          const div = document.createElement('div');
+          const isSold = item.purchased;
+          const canAfford = !isSold && isHumanTurn && wallet >= item.cost;
+          const isSelected = State.pendingUpgrade === item.kind;
+          div.className = 'shop-item' + (isSpecial ? ' special-item' : '') +
+            (isSold ? ' sold' : canAfford ? '' : ' disabled') + (isSelected ? ' selected' : '');
+          div.innerHTML =
+            `<div class="item-cat${isSpecial ? ' special' : ''}">${item.cat}</div>` +
+            `<div class="item-name">${item.label}</div>` +
+            `<div class="item-desc">${item.desc}</div>` +
+            `<div class="item-cost">${isSold ? 'SOLD' : coinIcon + ' ' + item.cost + 'g'}</div>`;
+          if (canAfford && !isSold) {
+            div.addEventListener('click', () => {
+              item.purchased = true;  // consume the slot immediately — prevents double-buy
+              if (item.target === 'board' || item.target === 'square') {
+                Economy.applyBoardUpgrade(item.kind);
+                UI.updateHUD();
+                UI.updateShop();
+              } else {
+                State.pendingUpgrade = item.kind;
+                UI.updateShop();
+                if (item.kind === 'freeze') UI.setStatus('FREEZE: Click an enemy piece to freeze it for 3 turns.');
+                else if (item.kind === 'leap') UI.setStatus('LEAP: Click one of your pieces to grant it the Leap ability.');
+                else UI.setStatus('Click one of your pieces to apply ' + item.label + '.');
+              }
+            });
+          }
+          grid.appendChild(div);
+        }
+      };
+
+      renderGrid(classicGrid, playerShop.classic, false);
+      renderGrid(specialGrid, playerShop.special, true);
+    },
+
+    setStatus(msg) {
+      document.getElementById('status-event').textContent = msg;
+    },
+  };
+
+  // ─── ECONOMY ─────────────────────────────────────────────────
+  const Economy = {
+    CAPTURE_BONUS: { pawn: 15, knight: 30, bishop: 30, rook: 40, queen: 60, king: 0 },
+    MOVE_COINS: 15,
+
+    POOL_CLASSIC: [
+      { kind: 'shield',       cat: 'PIECE', label: 'SHIELD',        desc: 'Piece survives 1 capture.',              cost: 80, target: 'piece' },
+      { kind: 'extraMove',    cat: 'PIECE', label: 'EXTRA MOVE',    desc: '+1 move range for 3 turns.',             cost: 60, target: 'piece' },
+      { kind: 'captureBonus', cat: 'PIECE', label: 'CAP BONUS',     desc: '+20g on next capture (2t).',             cost: 40, target: 'piece' },
+      { kind: 'bounty',       cat: 'PIECE', label: 'BOUNTY',        desc: 'If captured, foe loses 35g.',            cost: 35, target: 'piece' },
+      { kind: 'poison',       cat: 'PIECE', label: 'POISON',        desc: 'Each capture costs foe 30g (3t).',       cost: 55, target: 'piece' },
+      { kind: 'leech',        cat: 'PIECE', label: 'LEECH',         desc: 'Each capture steals 30g (2t).',          cost: 50, target: 'piece' },
+      { kind: 'vengeance',    cat: 'PIECE', label: 'VENGEANCE',     desc: 'If captured, attacker dies too.',         cost: 60, target: 'piece' },
+      { kind: 'ironWill',     cat: 'PIECE', label: 'IRON WILL',     desc: 'Immune to trap tiles (3t).',             cost: 30, target: 'piece' },
+      { kind: 'berserk',      cat: 'PIECE', label: 'BERSERK',       desc: '+35g on each capture (2t).',             cost: 50, target: 'piece' },
+      { kind: 'empower',      cat: 'PIECE', label: 'EMPOWER',       desc: 'Double all capture coins (2t).',         cost: 80, target: 'piece' },
+      { kind: 'goldMagnet',   cat: 'PIECE', label: 'GOLD MAGNET',   desc: '+4g per square moved (3t).',             cost: 45, target: 'piece' },
+      { kind: 'mirrorShield', cat: 'PIECE', label: 'MIRROR SHIELD', desc: 'Blocks capture + strips foe buff.',      cost: 90, target: 'piece' },
+      { kind: 'hex',          cat: 'PIECE', label: 'HEX',           desc: 'Foe earns 0 capture coins if taken (3t).', cost: 30, target: 'piece' },
+      { kind: 'rally',        cat: 'PIECE', label: 'RALLY',         desc: '+12g per ally within 2 squares.',        cost: 20, target: 'piece' },
+      { kind: 'sacrifice',    cat: 'PIECE', label: 'SACRIFICE',     desc: 'Remove piece, earn 65g instantly.',      cost: 30, target: 'piece' },
+      { kind: 'promote',      cat: 'PIECE', label: 'PROMOTE',       desc: 'Instantly promote pawn to knight.',      cost: 55, target: 'piece' },
+      { kind: 'freeze',       cat: 'PIECE', label: 'FREEZE',        desc: 'Enemy piece cannot move for 3 turns.',   cost: 65, target: 'enemy' },
+      { kind: 'leap',         cat: 'PIECE', label: 'LEAP',          desc: 'Piece jumps over blockers (4t).',        cost: 70, target: 'piece' },
+    ],
+    POOL_SPECIAL: [
+      { kind: 'coinBoost',    cat: 'BOARD', label: 'COIN BOOST',    desc: 'All earnings x1.5 (3 turns).',      cost: 100, target: 'board'  },
+      { kind: 'trapTile',     cat: 'BOARD', label: 'TRAP TILE',     desc: 'Enemy lands → loses a buff.',        cost: 120, target: 'square' },
+      { kind: 'blitz',        cat: 'BOARD', label: 'BLITZ',         desc: 'Move twice this turn.',              cost: 90,  target: 'board'  },
+      { kind: 'goldSteal',    cat: 'BOARD', label: 'GOLD STEAL',    desc: 'Steal 30g from opponent.',           cost: 70,  target: 'board'  },
+      { kind: 'goldRush',     cat: 'BOARD', label: 'GOLD RUSH',     desc: '+40g bonus on next capture.',        cost: 60,  target: 'board'  },
+    ],
+
+    rollShop(color) {
+      // Shuffle classic pool and pick 3; each item gets a fresh `purchased` flag
+      const classic = [...this.POOL_CLASSIC].sort(() => Math.random() - 0.5).slice(0, 3)
+        .map(item => ({ ...item, purchased: false }));
+      const special = [...this.POOL_SPECIAL].sort(() => Math.random() - 0.5).slice(0, 3)
+        .map(item => ({ ...item, purchased: false }));
+      State.shop[color] = { classic, special };
+    },
+
+    rerollShop() {
+      const cost = (State.rerollCount + 1) * 10;
+      if (State.wallets[State.turn] < cost) {
+        UI.setStatus('Not enough gold to reroll! (need ' + cost + 'g)');
+        return;
+      }
+      State.wallets[State.turn] -= cost;
+      State.rerollCount++;
+      this.rollShop(State.turn);
+      SFX.play('coin');
+      UI.updateShop();
+      UI.updateHUD();
+      UI.setStatus('Shop rerolled for ' + cost + 'g!');
+    },
+
+    awardCoins(color, didCapture, capturedType, movingPiece) {
+      let coins = this.MOVE_COINS;
+      if (didCapture && capturedType) {
+        let capCoins = this.CAPTURE_BONUS[capturedType] || 0;
+        if (movingPiece?.buffs.some(b => b.kind === 'captureBonus')) capCoins += 20;
+        if (movingPiece?.buffs.some(b => b.kind === 'berserk'))      capCoins += 35;
+        if (movingPiece?.buffs.some(b => b.kind === 'empower'))      capCoins *= 2;
+        coins += capCoins;
+      }
+      if (didCapture && State.goldRushActive[color]) { coins += 40; State.goldRushActive[color] = false; }
+      if (State.coinBoostTurns[color] > 0) coins = Math.floor(coins * 1.5);
+      State.wallets[color] += coins;
+      return coins;
+    },
+
+    applyUpgrade(kind, row, col) {
+      const costs = {
+        shield: 80, extraMove: 60, captureBonus: 40, bounty: 35,
+        poison: 55, leech: 50, vengeance: 60, ironWill: 30,
+        berserk: 50, empower: 80, goldMagnet: 45, mirrorShield: 90,
+        hex: 30, rally: 20, sacrifice: 30, promote: 55,
+        freeze: 65, leap: 70,
+      };
+      const cost = costs[kind];
+      if (cost === undefined || State.wallets[State.turn] < cost) return;
+      const piece = State.board[row][col];
+      if (!piece) return;
+      // freeze targets enemy pieces; every other upgrade targets own pieces
+      if (kind === 'freeze') {
+        if (piece.color === State.turn) return;
+      } else {
+        if (piece.color !== State.turn) return;
+      }
+      State.wallets[State.turn] -= cost;
+
+      // --- Instant effects (no buff stored on piece) ---
+      if (kind === 'rally') {
+        let bonus = 0;
+        for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+          if (!State.board[r][c] || State.board[r][c].color !== State.turn) continue;
+          if (Math.max(Math.abs(r - row), Math.abs(c - col)) <= 2) bonus += 12;
+        }
+        State.wallets[State.turn] += bonus;
+        SFX.play('coin');
+        Anim.upgradeApplied(row, col, kind);
+        UI.setStatus('RALLY! Earned ' + bonus + 'g from nearby allies.');
+        return;
+      }
+      if (kind === 'sacrifice') {
+        State.board[row][col] = null;
+        State.wallets[State.turn] += 65;
+        Anim.captureFlash(row, col);
+        SFX.play('upgrade');
+        UI.setStatus('SACRIFICE! Piece removed, earned 65g.');
+        return;
+      }
+      if (kind === 'promote') {
+        if (piece.type !== 'pawn') {
+          State.wallets[State.turn] += cost; // refund
+          UI.setStatus('PROMOTE only works on a pawn!');
+          return;
+        }
+        piece.type = 'knight';
+        Anim.upgradeApplied(row, col, kind);
+        SFX.play('upgrade');
+        UI.setStatus('Pawn promoted to Knight!');
+        return;
+      }
+      if (kind === 'leap') {
+        if (piece.type === 'knight') {
+          State.wallets[State.turn] += cost; // refund — incompatible
+          UI.setStatus('LEAP: Incompatible — a knight already leaps!');
+          return;
+        }
+      }
+
+      // --- Buff applied to piece ---
+      const turns = {
+        shield: null, extraMove: 3, captureBonus: 2, bounty: null,
+        poison: 3, leech: 2, vengeance: null, ironWill: 3,
+        berserk: 2, empower: 2, goldMagnet: 3, mirrorShield: null, hex: 3,
+        freeze: 3, leap: 4,
+      }[kind] ?? null;
+      piece.buffs.push({ kind, turnsLeft: turns, appliedAt: State.moveCount });
+      Anim.upgradeApplied(row, col, kind);
+      SFX.play('upgrade');
+      if (kind === 'freeze') {
+        UI.setStatus('Enemy ' + piece.type + ' FROZEN for 3 turns!');
+      } else if (kind === 'leap') {
+        UI.setStatus(piece.type + ' gains LEAP — jumps over blockers for 4 turns!');
+      } else {
+        UI.setStatus(piece.type + ' upgraded: ' + kind);
+      }
+    },
+
+    applyBoardUpgrade(kind) {
+      if (kind === 'coinBoost') {
+        if (State.wallets[State.turn] < 100) return;
+        State.wallets[State.turn] -= 100;
+        State.coinBoostTurns[State.turn] = 3;
+        SFX.play('upgrade');
+        UI.setStatus('Coin Boost active for 3 turns!');
+      }
+      if (kind === 'trapTile') {
+        if (State.wallets[State.turn] < 120) return;
+        State.wallets[State.turn] -= 120;
+        State.pendingUpgrade = 'trapTile';
+        UI.setStatus('Click a square to place the trap');
+      }
+      if (kind === 'blitz') {
+        if (State.wallets[State.turn] < 90) return;
+        State.wallets[State.turn] -= 90;
+        State.blitzActive[State.turn] = true;
+        SFX.play('upgrade');
+        UI.setStatus('BLITZ! You can move twice this turn.');
+      }
+      if (kind === 'goldSteal') {
+        if (State.wallets[State.turn] < 70) return;
+        const opp = State.turn === 'white' ? 'black' : 'white';
+        const stolen = Math.min(30, State.wallets[opp]);
+        State.wallets[State.turn] -= 70;
+        State.wallets[opp] -= stolen;
+        State.wallets[State.turn] += stolen;
+        SFX.play('coin');
+        UI.setStatus('GOLD STEAL! Took ' + stolen + 'g from opponent.');
+      }
+      if (kind === 'goldRush') {
+        if (State.wallets[State.turn] < 60) return;
+        State.wallets[State.turn] -= 60;
+        State.goldRushActive[State.turn] = true;
+        SFX.play('upgrade');
+        UI.setStatus('GOLD RUSH! Next capture earns +40g bonus.');
+      }
+    },
+
+    placeTrap(row, col) {
+      if (State.board[row][col]) {
+        // Refund the 120g already deducted in applyBoardUpgrade
+        State.wallets[State.turn] += 120;
+        UI.setStatus('Cannot place a trap on an occupied square — cost refunded.');
+        UI.updateHUD();
+        return;
+      }
+      State.traps.push({ row, col, owner: State.turn });
+      SFX.play('upgrade');
+      UI.setStatus('Trap placed at ' + 'abcdefgh'[col] + (8 - row));
+    },
+
+    tickBuffs(color) {
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const p = State.board[r][c];
+          if (!p || p.color !== color) continue;
+          p.buffs = p.buffs
+            .map(b => b.turnsLeft === null ? b : { ...b, turnsLeft: b.turnsLeft - 1 })
+            .filter(b => b.turnsLeft === null || b.turnsLeft > 0);
+        }
+      }
+      if (State.coinBoostTurns[color] > 0) State.coinBoostTurns[color]--;
+      State.blitzActive[color] = false;
+      State.goldRushActive[color] = false;
+    },
+  };
+
+  // ─── SFX ─────────────────────────────────────────────────────
+  const SFX = {
+    ctx: null,
+
+    getCtx() {
+      if (!this.ctx) {
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return null;
+          this.ctx = new Ctx();
+        } catch (e) {
+          return null;
+        }
+      }
+      return this.ctx;
+    },
+
+    tone(freq, type, startTime, duration, gain = 0.15) {
+      if (!State.soundEnabled) return;
+      const ctx = this.getCtx();
+      const osc = ctx.createOscillator();
+      const g   = ctx.createGain();
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, startTime);
+      g.gain.setValueAtTime(gain, startTime);
+      g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    },
+
+    play(sound) {
+      if (!State.soundEnabled) return;
+      const ctx = this.getCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const t = ctx.currentTime;
+      switch (sound) {
+        case 'move':
+          this.tone(220, 'square', t, 0.08, 0.1);
+          break;
+        case 'capture':
+          this.tone(180, 'square', t,       0.06, 0.15);
+          this.tone(120, 'square', t + 0.06, 0.1,  0.15);
+          break;
+        case 'coin':
+          this.tone(660, 'square', t,        0.08, 0.12);
+          this.tone(880, 'square', t + 0.08, 0.08, 0.12);
+          break;
+        case 'upgrade':
+          this.tone(440, 'square', t,        0.08, 0.15);
+          this.tone(550, 'square', t + 0.08, 0.08, 0.15);
+          this.tone(660, 'square', t + 0.16, 0.12, 0.15);
+          break;
+        case 'shieldBreak':
+          this.tone(300, 'sawtooth', t,        0.05, 0.2);
+          this.tone(200, 'sawtooth', t + 0.05, 0.05, 0.2);
+          this.tone(100, 'sawtooth', t + 0.1,  0.1,  0.2);
+          break;
+        case 'check':
+          this.tone(440, 'square', t,        0.1,  0.18);
+          this.tone(330, 'square', t + 0.15, 0.1,  0.18);
+          break;
+        case 'win':
+          [523, 659, 784, 1047, 1319].forEach((f, i) => {
+            this.tone(f, 'square', t + i * 0.1, 0.15, 0.2);
+          });
+          break;
+        case 'trap':
+          for (let i = 0; i < 4; i++) {
+            this.tone(80 + Math.random() * 40, 'sawtooth', t + i * 0.04, 0.04, 0.18);
+          }
+          break;
+      }
+    },
+  };
+
+  // ─── AI ──────────────────────────────────────────────────────
+  const AI = {
+    PIECE_VALUES: { pawn: 100, knight: 320, bishop: 330, rook: 500, queen: 900, king: 20000 },
+
+    PAWN_TABLE: [
+      [ 0,  0,  0,  0,  0,  0,  0,  0],
+      [50, 50, 50, 50, 50, 50, 50, 50],
+      [10, 10, 20, 30, 30, 20, 10, 10],
+      [ 5,  5, 10, 25, 25, 10,  5,  5],
+      [ 0,  0,  0, 20, 20,  0,  0,  0],
+      [ 5, -5,-10,  0,  0,-10, -5,  5],
+      [ 5, 10, 10,-20,-20, 10, 10,  5],
+      [ 0,  0,  0,  0,  0,  0,  0,  0],
+    ],
+
+    KNIGHT_TABLE: [
+      [-50,-40,-30,-30,-30,-30,-40,-50],
+      [-40,-20,  0,  5,  5,  0,-20,-40],
+      [-30,  5, 10, 15, 15, 10,  5,-30],
+      [-30,  0, 15, 20, 20, 15,  0,-30],
+      [-30,  5, 15, 20, 20, 15,  5,-30],
+      [-30,  0, 10, 15, 15, 10,  0,-30],
+      [-40,-20,  0,  0,  0,  0,-20,-40],
+      [-50,-40,-30,-30,-30,-30,-40,-50],
+    ],
+
+    BISHOP_TABLE: [
+      [-20,-10,-10,-10,-10,-10,-10,-20],
+      [-10,  5,  0,  0,  0,  0,  5,-10],
+      [-10, 10, 10, 10, 10, 10, 10,-10],
+      [-10,  0, 10, 10, 10, 10,  0,-10],
+      [-10,  5,  5, 10, 10,  5,  5,-10],
+      [-10,  0,  5, 10, 10,  5,  0,-10],
+      [-10,  0,  0,  0,  0,  0,  0,-10],
+      [-20,-10,-10,-10,-10,-10,-10,-20],
+    ],
+
+    ROOK_TABLE: [
+      [ 0,  0,  0,  5,  5,  0,  0,  0],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [-5,  0,  0,  0,  0,  0,  0, -5],
+      [ 5, 10, 10, 10, 10, 10, 10,  5],
+      [ 0,  0,  0,  0,  0,  0,  0,  0],
+    ],
+
+    // ── Web Worker for off-thread minimax ──────────────────────
+    // The worker bundles its own copy of chess.js + eval + minimax so the main
+    // thread is never blocked (no more "page unresponsive" popup).
+    _worker:     null,
+    _workerCbs:  [],   // queue of resolve callbacks (one per in-flight search)
+
+    _workerSrc: `
+importScripts('https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.js');
+const PV={p:100,n:320,b:330,r:500,q:900,k:20000};
+const PT=[[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]];
+const NT=[[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,5,5,0,-20,-40],[-30,5,10,15,15,10,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,10,15,15,10,0,-30],[-40,-20,0,0,0,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]];
+const BT=[[-20,-10,-10,-10,-10,-10,-10,-20],[-10,5,0,0,0,0,5,-10],[-10,10,10,10,10,10,10,-10],[-10,0,10,10,10,10,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,5,10,10,5,0,-10],[-10,0,0,0,0,0,0,-10],[-20,-10,-10,-10,-10,-10,-10,-20]];
+const RT=[[0,0,0,5,5,0,0,0],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[5,10,10,10,10,10,10,5],[0,0,0,0,0,0,0,0]];
+function evalPos(cjs){
+  const b=cjs.board(); let s=cjs.moves().length*(cjs.turn()==='b'?3:-3);
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const cp=b[r][c]; if(!cp) continue;
+    const blk=cp.color==='b', tr=blk?r:7-r; let v=PV[cp.type]||0;
+    if(cp.type==='p') v+=PT[tr][c]; if(cp.type==='n') v+=NT[tr][c];
+    if(cp.type==='b') v+=BT[tr][c]; if(cp.type==='r') v+=RT[tr][c];
+    s+=blk?v:-v;
+  }
+  return s;
+}
+function mm(cjs,d,a,b,max){
+  const ms=cjs.moves({verbose:true});
+  if(!ms.length) return cjs.in_check()?(max?-50000:50000):0;
+  if(d===0) return evalPos(cjs);
+  if(max){
+    let best=-Infinity;
+    for(const m of ms){const cl=new Chess(cjs.fen());cl.move({from:m.from,to:m.to,promotion:m.promotion||'q'});best=Math.max(best,mm(cl,d-1,a,b,false));a=Math.max(a,best);if(b<=a)break;}
+    return best;
+  }else{
+    let best=Infinity;
+    for(const m of ms){const cl=new Chess(cjs.fen());cl.move({from:m.from,to:m.to,promotion:m.promotion||'q'});best=Math.min(best,mm(cl,d-1,a,b,true));b=Math.min(b,best);if(b<=a)break;}
+    return best;
+  }
+}
+self.onmessage=function(e){
+  const{fen,depth,noise,aiColor}=e.data;
+  // evalPos scores positive when black is winning. Flip sign when AI plays white.
+  const sign=aiColor==='b'?1:-1;
+  const root=new Chess(fen);
+  const moves=root.moves({verbose:true});
+  if(!moves.length){self.postMessage(null);return;}
+  // Shuffle move order so equal-score positions play differently each game
+  for(let i=moves.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=moves[i];moves[i]=moves[j];moves[j]=t;}
+  let best=-Infinity,bestMove=moves[0];
+  for(const m of moves){
+    const cl=new Chess(fen);
+    cl.move({from:m.from,to:m.to,promotion:m.promotion||'q'});
+    // Always add noise — even hard mode gets a small jitter so games differ
+    let sc=sign*mm(cl,depth-1,-Infinity,Infinity,false)+(Math.random()*2-1)*noise;
+    if(sc>best){best=sc;bestMove=m;}
+  }
+  self.postMessage({from:bestMove.from,to:bestMove.to,promotion:bestMove.promotion,flags:bestMove.flags});
+};`,
+
+    _ensureWorker() {
+      if (this._worker) return;
+      const blob = new Blob([this._workerSrc], { type: 'application/javascript' });
+      this._worker = new Worker(URL.createObjectURL(blob));
+      this._worker.onmessage = e => {
+        const resolve = this._workerCbs.shift();
+        if (resolve) resolve(e.data);
+      };
+      this._worker.onerror = err => {
+        console.error('AI worker error:', err.message);
+        const resolve = this._workerCbs.shift();
+        if (resolve) resolve(null); // fall through to fallback
+      };
+    },
+
+    // Returns a Promise that resolves with { from, to, flags, promotion } or null
+    _searchAsync(fen, depth, noise) {
+      return new Promise(resolve => {
+        this._ensureWorker();
+        this._workerCbs.push(resolve);
+        // Pass aiColor so the worker knows whose score to maximize
+        const aiColor = State.aiColor === 'white' ? 'w' : 'b';
+        this._worker.postMessage({ fen, depth, noise, aiColor });
+      });
+    },
+
+    // cjsInst — a ChessLib instance (NOT an 8×8 array)
+    evaluate(cjsInst) {
+      const b = cjsInst.board(); // 8×8: null | { type:'p'|'n'|..., color:'w'|'b' }
+      let score = 0;
+
+      // Mobility for the side to move (positive = good for black)
+      const mobilityCount = cjsInst.moves().length;
+      score += cjsInst.turn() === 'b' ? mobilityCount * 3 : -mobilityCount * 3;
+
+      // Wallet advantage bonus (global state — not affected by tree depth)
+      score += (State.wallets.black - State.wallets.white) * 0.5;
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cp = b[r][c];
+          if (!cp) continue;
+          const type  = CJS_TYPE[cp.type];   // e.g. 'p' → 'pawn'
+          const color = cp.color === 'w' ? 'white' : 'black';
+          let val = this.PIECE_VALUES[type] || 0;
+          const tableRow = color === 'black' ? r : 7 - r;
+          if (type === 'pawn')   val += this.PAWN_TABLE[tableRow][c];
+          if (type === 'knight') val += this.KNIGHT_TABLE[tableRow][c];
+          if (type === 'bishop') val += this.BISHOP_TABLE[tableRow][c];
+          if (type === 'rook')   val += this.ROOK_TABLE[tableRow][c];
+          // Buff bonuses — approximate using current State.board; same color guard avoids mismatches
+          const sp = State.board[r][c];
+          if (sp?.color === color) {
+            if (sp.buffs?.some(b => b.kind === 'shield'))       val += 60;
+            if (sp.buffs?.some(b => b.kind === 'mirrorShield')) val += 80;
+            if (sp.buffs?.some(b => b.kind === 'berserk'))      val += 30;
+            if (sp.buffs?.some(b => b.kind === 'empower'))      val += 40;
+          }
+          score += color === 'black' ? val : -val;
+        }
+      }
+      return score;
+    },
+
+    // Alpha-beta minimax over ChessLib instances (no 8×8 array board copies needed)
+    minimax(cjsInst, depth, alpha, beta, maximizing) {
+      const moves = cjsInst.moves({ verbose: true });
+      if (moves.length === 0) {
+        // Checkmate or stalemate
+        return cjsInst.in_check() ? (maximizing ? -50000 : 50000) : 0;
+      }
+      if (depth === 0) return this.evaluate(cjsInst);
+
+      if (maximizing) {
+        let best = -Infinity;
+        for (const m of moves) {
+          const clone = new ChessLib(cjsInst.fen());
+          clone.move({ from: m.from, to: m.to, promotion: m.promotion });
+          const score = this.minimax(clone, depth - 1, alpha, beta, false);
+          best = Math.max(best, score);
+          alpha = Math.max(alpha, best);
+          if (beta <= alpha) break;
+        }
+        return best;
+      } else {
+        let best = Infinity;
+        for (const m of moves) {
+          const clone = new ChessLib(cjsInst.fen());
+          clone.move({ from: m.from, to: m.to, promotion: m.promotion });
+          const score = this.minimax(clone, depth - 1, alpha, beta, true);
+          best = Math.min(best, score);
+          beta = Math.min(beta, best);
+          if (beta <= alpha) break;
+        }
+        return best;
+      }
+    },
+
+    // Find all AI pieces of a given type (or any type if omitted)
+    findPieces(type) {
+      const aiColor = State.aiColor;
+      const result = [];
+      for (let r = 0; r < 8; r++)
+        for (let c = 0; c < 8; c++) {
+          const p = State.board[r][c];
+          if (p?.color === aiColor && (!type || p.type === type)) result.push({ r, c, piece: p });
+        }
+      return result;
+    },
+
+    hasBuff(r, c, kind) {
+      return State.board[r][c]?.buffs?.some(b => b.kind === kind) ?? false;
+    },
+
+    chooseBoardUpgrade() {
+      // Save gold early to avoid spending randomly — skip upgrade occasionally
+      if (Math.random() < 0.15) return;
+
+      const aiColor  = State.aiColor;
+      const humColor = State.humanColor;
+      const shop = State.shop[aiColor] || { classic: [], special: [] };
+      const available = new Set([...shop.classic, ...shop.special].map(i => i.kind));
+      const wallet = () => State.wallets[aiColor];
+
+      // Board-level specials first (high value)
+      if (wallet() >= 100 && State.coinBoostTurns[aiColor] === 0 && available.has('coinBoost')) {
+        Economy.applyBoardUpgrade('coinBoost'); return;
+      }
+      if (wallet() >= 70 && available.has('goldSteal') && State.wallets[humColor] > 30) {
+        Economy.applyBoardUpgrade('goldSteal'); return;
+      }
+      if (wallet() >= 90 && available.has('blitz') && !State.blitzActive[aiColor]) {
+        Economy.applyBoardUpgrade('blitz'); return;
+      }
+      if (wallet() >= 60 && available.has('goldRush') && !State.goldRushActive[aiColor]) {
+        Economy.applyBoardUpgrade('goldRush'); return;
+      }
+
+      // Piece-level upgrades — pick a suitable piece at random from candidates
+      const classicKinds = (shop.classic || []).map(i => i.kind);
+      if (classicKinds.length === 0) return;
+
+      // Shuffle candidate kinds so the AI doesn't always pick the same upgrade
+      const shuffled = [...classicKinds].sort(() => Math.random() - 0.5);
+
+      for (const kind of shuffled) {
+        const costs = {
+          shield: 80, extraMove: 60, captureBonus: 40, bounty: 35,
+          poison: 55, leech: 50, vengeance: 60, ironWill: 30,
+          berserk: 50, empower: 80, goldMagnet: 45, mirrorShield: 90,
+          hex: 30, rally: 20, sacrifice: 30, promote: 55,
+          freeze: 65, leap: 70,
+        };
+        const cost = costs[kind];
+        if (!cost || wallet() < cost) continue;
+
+        // Find a suitable target piece for this kind
+        let target = null;
+
+        if (kind === 'sacrifice') {
+          // Only sacrifice pawns that are not advanced
+          const pawns = this.findPieces('pawn').filter(({ r }) => r >= 3);
+          if (pawns.length > 0) target = pawns[Math.floor(Math.random() * pawns.length)];
+        } else if (kind === 'promote') {
+          const pawns = this.findPieces('pawn');
+          if (pawns.length > 0) target = pawns[Math.floor(Math.random() * pawns.length)];
+        } else if (kind === 'rally') {
+          // Pick piece with most neighbours
+          const pieces = this.findPieces();
+          let best = null, bestCount = 0;
+          for (const p of pieces) {
+            let count = 0;
+            for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) {
+              const nr = p.r + dr, nc = p.c + dc;
+              if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && State.board[nr][nc]?.color === aiColor) count++;
+            }
+            if (count > bestCount) { bestCount = count; best = p; }
+          }
+          if (best && bestCount >= 2) target = best;
+        } else if (kind === 'ironWill' || kind === 'hex') {
+          // Apply to any piece without this buff
+          const pieces = this.findPieces().filter(({ r, c }) => !this.hasBuff(r, c, kind));
+          if (pieces.length > 0) target = pieces[Math.floor(Math.random() * pieces.length)];
+        } else if (kind === 'empower' || kind === 'berserk' || kind === 'captureBonus') {
+          // Prefer aggressive pieces: queen, rook, knight
+          const aggressive = this.findPieces().filter(({ r, c, piece }) =>
+            ['queen','rook','knight'].includes(piece.type) && !this.hasBuff(r, c, kind)
+          );
+          const pool = aggressive.length > 0 ? aggressive : this.findPieces().filter(({ r, c }) => !this.hasBuff(r, c, kind));
+          if (pool.length > 0) target = pool[Math.floor(Math.random() * pool.length)];
+        } else if (kind === 'goldMagnet') {
+          // Prefer pieces that move a lot: bishops, rooks, queen
+          const movers = this.findPieces().filter(({ r, c, piece }) =>
+            ['queen','bishop','rook'].includes(piece.type) && !this.hasBuff(r, c, kind)
+          );
+          const pool = movers.length > 0 ? movers : this.findPieces().filter(({ r, c }) => !this.hasBuff(r, c, kind));
+          if (pool.length > 0) target = pool[Math.floor(Math.random() * pool.length)];
+        } else if (kind === 'vengeance' || kind === 'bounty') {
+          // Apply to exposed pieces in enemy territory
+          const front = this.findPieces().filter(({ r }) => r >= 3);
+          const pool = front.length > 0 ? front : this.findPieces();
+          if (pool.length > 0) target = pool[Math.floor(Math.random() * pool.length)];
+        } else if (kind === 'poison' || kind === 'leech') {
+          // Prefer knights or bishops (can get into enemy territory)
+          const pieces = this.findPieces().filter(({ piece }) =>
+            ['knight','bishop','rook','queen'].includes(piece.type)
+          );
+          if (pieces.length > 0) target = pieces[Math.floor(Math.random() * pieces.length)];
+        } else if (kind === 'shield' || kind === 'mirrorShield') {
+          // Prefer the queen, then any unshielded piece
+          const queens = this.findPieces('queen').filter(({ r, c }) => !this.hasBuff(r, c, kind));
+          const others = this.findPieces().filter(({ r, c }) => !this.hasBuff(r, c, kind));
+          const pool = queens.length > 0 ? queens : others;
+          if (pool.length > 0) target = pool[Math.floor(Math.random() * pool.length)];
+        } else if (kind === 'freeze') {
+          // Target the highest-value human piece that isn't already frozen
+          const enemies = [];
+          for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+            const p = State.board[r][c];
+            if (p?.color === humColor && !p.buffs.some(b => b.kind === 'freeze'))
+              enemies.push({ r, c, piece: p });
+          }
+          enemies.sort((a, b) => (this.PIECE_VALUES[b.piece.type] || 0) - (this.PIECE_VALUES[a.piece.type] || 0));
+          if (enemies.length > 0) target = enemies[0];
+        } else if (kind === 'leap') {
+          // Prefer sliders (bishop, rook, queen) without leap; avoid knights (incompatible)
+          const sliders = this.findPieces().filter(({ piece, r, c }) =>
+            ['queen','bishop','rook'].includes(piece.type) && !this.hasBuff(r, c, 'leap')
+          );
+          const pool = sliders.length > 0 ? sliders :
+            this.findPieces().filter(({ piece, r, c }) => piece.type !== 'knight' && !this.hasBuff(r, c, 'leap'));
+          if (pool.length > 0) target = pool[Math.floor(Math.random() * pool.length)];
+        } else {
+          // Fallback: any piece
+          const pieces = this.findPieces();
+          if (pieces.length > 0) target = pieces[Math.floor(Math.random() * pieces.length)];
+        }
+
+        if (target) {
+          Economy.applyUpgrade(kind, target.r, target.c);
+          return; // one upgrade per turn
+        }
+      }
+
+      // Trap tile as last resort
+      if (wallet() >= 120 && available.has('trapTile')) {
+        const targets = [[3,3],[3,4],[4,3],[4,4],[2,3],[2,4],[3,2],[3,5]];
+        for (const [r,c] of targets) {
+          if (!State.board[r][c]) { // only place on empty squares
+            State.wallets[aiColor] -= 120;
+            State.traps.push({ row: r, col: c, owner: aiColor });
+            break;
+          }
+        }
+      }
+    },
+
+    // Async — runs minimax in a Web Worker so the main thread stays responsive.
+    async takeTurn() {
+      const aiColor = State.aiColor;
+      if (State.phase !== 'playing' || State.turn !== aiColor) return;
+
+      this.chooseBoardUpgrade();
+
+      // Sync chess.js with current State.board, then pull all legal chess moves
+      syncCjs();
+      // Filter out moves from frozen AI pieces — they cannot move
+      const rawMoves = cjs.moves({ verbose: true }).filter(m => {
+        const from = fromAlg(m.from);
+        return !State.board[from.row][from.col]?.buffs?.some(b => b.kind === 'freeze');
+      });
+
+      // Gather extraMove-buff squares that chess.js doesn't generate (augmentation only)
+      const extraOnlyMoves = [];
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        const p = State.board[r][c];
+        if (!p || p.color !== aiColor || !Chess.hasExtraMove(p) || p.buffs.some(b => b.kind === 'freeze')) continue;
+        for (const em of Chess._extraMoveSqs(p, r, c)) {
+          const covered = rawMoves.some(m =>
+            fromAlg(m.from).row === r && fromAlg(m.from).col === c &&
+            fromAlg(m.to).row === em.row && fromAlg(m.to).col === em.col
+          );
+          if (!covered) extraOnlyMoves.push({ fromRow: r, fromCol: c, ...em });
+        }
+      }
+
+      // Gather leap-buff squares for non-frozen AI pieces with the leap buff
+      const leapOnlyMoves = [];
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        const p = State.board[r][c];
+        if (!p || p.color !== aiColor || !p.buffs.some(b => b.kind === 'leap') || p.buffs.some(b => b.kind === 'freeze')) continue;
+        for (const lm of Chess._leapSqs(p, r, c)) {
+          const covered = rawMoves.some(m =>
+            fromAlg(m.from).row === r && fromAlg(m.from).col === c &&
+            fromAlg(m.to).row === lm.row && fromAlg(m.to).col === lm.col
+          );
+          if (!covered) leapOnlyMoves.push({ fromRow: r, fromCol: c, ...lm });
+        }
+      }
+
+      if (rawMoves.length === 0 && extraOnlyMoves.length === 0 && leapOnlyMoves.length === 0) {
+        setTimeout(() => Game.endTurn(), 300);
+        return;
+      }
+
+      // Helper: convert a chess.js verbose move to our {fromRow,fromCol,row,col,special} format
+      const toOurMove = m => {
+        const from = fromAlg(m.from), to = fromAlg(m.to);
+        let special = null;
+        if      (m.flags.includes('k')) special = 'castleK';
+        else if (m.flags.includes('q')) special = 'castleQ';
+        else if (m.flags.includes('e')) special = 'enPassant';
+        return { fromRow: from.row, fromCol: from.col, row: to.row, col: to.col, special };
+      };
+
+      let bestMove;
+
+      if (State.difficulty === 'easy') {
+        // Easy: completely random selection over all legal moves (chess.js + extraMove + leap)
+        const all = [...rawMoves.map(toOurMove), ...extraOnlyMoves, ...leapOnlyMoves];
+        bestMove = all[Math.floor(Math.random() * all.length)];
+      } else {
+        const depth = State.difficulty === 'hard' ? 3 : 2;
+        const noise = State.difficulty === 'hard' ? 8 : 30; // hard: ±8 jitter, medium: ±30
+
+        // Off-thread search — UI stays fully responsive while the worker thinks
+        const result = await this._searchAsync(cjs.fen(), depth, noise);
+
+        // Guard: game might have ended while the worker was thinking
+        if (State.phase !== 'playing' || State.turn !== aiColor) return;
+
+        if (result) {
+          bestMove = toOurMove(result);
+        }
+
+        // Prefer an extraMove or leap buff capture of a high-value piece if clearly better
+        for (const em of [...extraOnlyMoves, ...leapOnlyMoves]) {
+          const target = State.board[em.row][em.col];
+          if (target && this.PIECE_VALUES[target.type] >= 500) { bestMove = em; break; }
+        }
+
+        // Fallback if worker returned null (no legal moves, shouldn't happen)
+        if (!bestMove && rawMoves.length > 0) bestMove = toOurMove(rawMoves[0]);
+      }
+
+      if (!bestMove) { setTimeout(() => Game.endTurn(), 300); return; }
+
+      // Fix 1 — anti-oscillation: avoid immediately reversing the last AI move
+      // (prevents a rook trapped in a 2-square corridor from ping-ponging forever)
+      if (State.lastAIMove && bestMove) {
+        const last = State.lastAIMove;
+        const isReverse = bestMove.fromRow === last.row && bestMove.fromCol === last.col &&
+                          bestMove.row === last.fromRow && bestMove.col === last.fromCol;
+        if (isReverse) {
+          // Pick any other move that isn't the reverse; prefer a non-same-piece move first
+          const alternatives = rawMoves.map(toOurMove).filter(m =>
+            !(m.fromRow === bestMove.fromRow && m.fromCol === bestMove.fromCol &&
+              m.row === bestMove.row && m.col === bestMove.col)
+          );
+          if (alternatives.length > 0) {
+            // Prefer moves from a different piece; fall back to any alternative
+            const diffPiece = alternatives.filter(m => m.fromRow !== last.row || m.fromCol !== last.col);
+            const pool = diffPiece.length > 0 ? diffPiece : alternatives;
+            bestMove = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
+          }
+        }
+      }
+
+      const { fromRow, fromCol, row, col, special } = bestMove;
+      const movesBefore = State.movesMadeThisTurn;
+      Game.executeMove(fromRow, fromCol, row, col, special);
+
+      // Record last AI move for oscillation detection next turn
+      if (State.movesMadeThisTurn > movesBefore) {
+        State.lastAIMove = { fromRow, fromCol, row, col };
+      }
+
+      // If shield absorbed the move, try a fallback from the chess.js move list
+      if (State.movesMadeThisTurn === movesBefore) {
+        for (const m of rawMoves) {
+          const fb = toOurMove(m);
+          if (fb.row === row && fb.col === col) continue; // skip the shielded target
+          Game.executeMove(fb.fromRow, fb.fromCol, fb.row, fb.col, fb.special);
+          if (State.movesMadeThisTurn > movesBefore) {
+            State.lastAIMove = { fromRow: fb.fromRow, fromCol: fb.fromCol, row: fb.row, col: fb.col };
+            break;
+          }
+        }
+      }
+
+      setTimeout(() => Game.endTurn(), 300);
+    },
+  };
+
+
+  // ─── RENDER ──────────────────────────────────────────────────
+  const Render = {
+    canvas: null,
+    ctx: null,
+    SQ: 52,   // pixels per square
+
+    init() {
+      this.canvas = document.getElementById('board');
+      this.ctx = this.canvas.getContext('2d');
+      this.canvas.width  = this.SQ * 8;
+      this.canvas.height = this.SQ * 8;
+    },
+
+    // Convert board row/col to canvas x/y (top-left of square)
+    toXY(row, col) {
+      return { x: col * this.SQ, y: row * this.SQ };
+    },
+
+    // Convert canvas x/y to board row/col
+    toRC(x, y) {
+      return {
+        row: Math.min(7, Math.floor(y / this.SQ)),
+        col: Math.min(7, Math.floor(x / this.SQ)),
+      };
+    },
+
+    drawBoard() {
+      const { ctx, SQ } = this;
+      const LIGHT = '#c4a46a';
+      const DARK  = '#7a5228';
+
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? LIGHT : DARK;
+          ctx.fillRect(c * SQ, r * SQ, SQ, SQ);
+        }
+      }
+    },
+
+    drawHighlights() {
+      const { ctx, SQ } = this;
+      ctx.save();
+
+      // Selected square
+      if (State.selected) {
+        const { row, col } = State.selected;
+        ctx.fillStyle = 'rgba(245,197,66,0.5)';
+        ctx.fillRect(col * SQ, row * SQ, SQ, SQ);
+      }
+
+      // Valid move dots
+      for (const m of State.validMoves) {
+        const hasEnemy = State.board[m.row][m.col] !== null;
+        if (hasEnemy) {
+          // Capture highlight — red tint
+          ctx.fillStyle = 'rgba(200,60,20,0.35)';
+          ctx.fillRect(m.col * SQ, m.row * SQ, SQ, SQ);
+        } else {
+          // Move dot
+          ctx.fillStyle = 'rgba(245,197,66,0.6)';
+          ctx.beginPath();
+          ctx.arc(m.col * SQ + SQ / 2, m.row * SQ + SQ / 2, 8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Trap tiles
+      for (const trap of State.traps) {
+        const x = trap.col * SQ, y = trap.row * SQ;
+        ctx.fillStyle = 'rgba(140,20,10,0.35)';
+        ctx.fillRect(x, y, SQ, SQ);
+        ctx.strokeStyle = '#8a2010';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x + 8, y + 8); ctx.lineTo(x + SQ - 8, y + SQ - 8);
+        ctx.moveTo(x + SQ - 8, y + 8); ctx.lineTo(x + 8, y + SQ - 8);
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+
+    drawGrid() {
+      const { ctx, SQ } = this;
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= 8; i++) {
+        ctx.beginPath(); ctx.moveTo(i * SQ, 0); ctx.lineTo(i * SQ, SQ * 8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * SQ); ctx.lineTo(SQ * 8, i * SQ); ctx.stroke();
+      }
+    },
+
+    frame() {
+      if (State.phase !== 'playing') return;
+      this.drawBoard();
+      this.drawHighlights();
+      this.drawAllPieces();
+      // Badges drawn in Task 9
+      // Animations drawn in Task 10
+      this.drawGrid();
+      Anim.step();
+    },
+
+    startLoop() {
+      if (this._rafId) return;
+      const loop = () => { this.frame(); this._rafId = requestAnimationFrame(loop); };
+      this._rafId = requestAnimationFrame(loop);
+    },
+
+    // Draw a pixel-art piece at canvas position (x, y) in a 52x52 area
+    drawPiece(piece, x, y, scale = 1) {
+      const { ctx } = this;
+      const isWhite = piece.color === 'white';
+      const S = this.SQ * scale;
+      ctx.save();
+      ctx.translate(x, y);
+
+      const W = isWhite ? '#f0e8d0' : '#2c1c0e';   // main fill
+      const O = isWhite ? '#7a5020' : '#0c0806';    // outline
+      const H = isWhite ? '#ffffff' : '#4a3020';    // highlight
+      const D = isWhite ? '#c8a060' : '#060402';    // shadow
+
+      // Drop shadow for piece legibility
+      ctx.shadowColor = 'rgba(0,0,0,0.75)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 3;
+
+      switch (piece.type) {
+        case 'pawn':   this._drawPawn(W, O, H, D, S); break;
+        case 'knight': this._drawKnight(W, O, H, D, S); break;
+        case 'bishop': this._drawBishop(W, O, H, D, S); break;
+        case 'rook':   this._drawRook(W, O, H, D, S); break;
+        case 'queen':  this._drawQueen(W, O, H, D, S); break;
+        case 'king':   this._drawKing(W, O, H, D, S); break;
+      }
+      ctx.restore();
+    },
+
+    _drawPawn(W, O, H, D, S) {
+      const { ctx } = this;
+      const u = S / 52;
+      // Base
+      ctx.fillStyle = O; ctx.fillRect(14*u, 40*u, 24*u, 8*u);
+      ctx.fillStyle = W; ctx.fillRect(16*u, 38*u, 20*u, 8*u);
+      // Stem
+      ctx.fillStyle = O; ctx.fillRect(20*u, 26*u, 12*u, 14*u);
+      ctx.fillStyle = W; ctx.fillRect(22*u, 24*u, 8*u,  14*u);
+      // Head
+      ctx.fillStyle = O; ctx.fillRect(16*u, 14*u, 20*u, 14*u);
+      ctx.fillStyle = W; ctx.fillRect(18*u, 12*u, 16*u, 14*u);
+      ctx.fillStyle = H; ctx.fillRect(20*u, 14*u, 4*u,  4*u);
+      ctx.fillStyle = D; ctx.fillRect(28*u, 22*u, 4*u,  4*u);
+    },
+
+    _drawRook(W, O, H, D, S) {
+      const { ctx } = this;
+      const u = S / 52;
+      // Base
+      ctx.fillStyle = O; ctx.fillRect(10*u, 42*u, 32*u, 8*u);
+      ctx.fillStyle = W; ctx.fillRect(12*u, 40*u, 28*u, 8*u);
+      // Column
+      ctx.fillStyle = O; ctx.fillRect(14*u, 18*u, 24*u, 24*u);
+      ctx.fillStyle = W; ctx.fillRect(16*u, 16*u, 20*u, 24*u);
+      // Battlements
+      ctx.fillStyle = O;
+      ctx.fillRect(10*u, 10*u, 8*u, 10*u);
+      ctx.fillRect(22*u, 10*u, 8*u, 10*u);
+      ctx.fillRect(34*u, 10*u, 8*u, 10*u);
+      ctx.fillStyle = W;
+      ctx.fillRect(12*u, 8*u, 4*u, 10*u);
+      ctx.fillRect(24*u, 8*u, 4*u, 10*u);
+      ctx.fillRect(36*u, 8*u, 4*u, 10*u);
+      // Highlights
+      ctx.fillStyle = H; ctx.fillRect(16*u, 16*u, 4*u, 4*u);
+      ctx.fillStyle = D; ctx.fillRect(32*u, 36*u, 4*u, 4*u);
+    },
+
+    _drawKnight(W, O, H, D, S) {
+      const { ctx } = this;
+      const u = S / 52;
+      // Base
+      ctx.fillStyle = O; ctx.fillRect(10*u, 42*u, 32*u, 8*u);
+      ctx.fillStyle = W; ctx.fillRect(12*u, 40*u, 28*u, 8*u);
+      // Body
+      ctx.fillStyle = O; ctx.fillRect(14*u, 22*u, 22*u, 20*u);
+      ctx.fillStyle = W; ctx.fillRect(16*u, 20*u, 18*u, 20*u);
+      // Head (horse shape)
+      ctx.fillStyle = O;
+      ctx.fillRect(18*u, 8*u,  20*u, 16*u);
+      ctx.fillRect(14*u, 14*u, 10*u, 10*u);
+      ctx.fillStyle = W;
+      ctx.fillRect(20*u, 6*u,  16*u, 16*u);
+      ctx.fillRect(16*u, 12*u, 6*u,  10*u);
+      // Eye
+      ctx.fillStyle = '#c8960c'; ctx.fillRect(30*u, 10*u, 4*u, 4*u);
+      // Highlights
+      ctx.fillStyle = H; ctx.fillRect(20*u, 8*u, 4*u, 4*u);
+      ctx.fillStyle = D; ctx.fillRect(32*u, 18*u, 4*u, 4*u);
+    },
+
+    _drawBishop(W, O, H, D, S) {
+      const { ctx } = this;
+      const u = S / 52;
+      // Base
+      ctx.fillStyle = O; ctx.fillRect(10*u, 42*u, 32*u, 8*u);
+      ctx.fillStyle = W; ctx.fillRect(12*u, 40*u, 28*u, 8*u);
+      // Lower body
+      ctx.fillStyle = O; ctx.fillRect(14*u, 28*u, 24*u, 14*u);
+      ctx.fillStyle = W; ctx.fillRect(16*u, 26*u, 20*u, 14*u);
+      // Upper body
+      ctx.fillStyle = O; ctx.fillRect(18*u, 16*u, 16*u, 14*u);
+      ctx.fillStyle = W; ctx.fillRect(20*u, 14*u, 12*u, 14*u);
+      // Mitre top
+      ctx.fillStyle = O; ctx.fillRect(22*u, 6*u, 8*u, 12*u);
+      ctx.fillStyle = W; ctx.fillRect(24*u, 4*u, 4*u, 12*u);
+      // Dot
+      ctx.fillStyle = '#c8960c'; ctx.fillRect(24*u, 16*u, 4*u, 4*u);
+      // Highlights
+      ctx.fillStyle = H; ctx.fillRect(20*u, 14*u, 4*u, 4*u);
+      ctx.fillStyle = D; ctx.fillRect(30*u, 34*u, 4*u, 4*u);
+    },
+
+    _drawQueen(W, O, H, D, S) {
+      const { ctx } = this;
+      const u = S / 52;
+      // Base
+      ctx.fillStyle = O; ctx.fillRect(8*u, 42*u, 36*u, 8*u);
+      ctx.fillStyle = W; ctx.fillRect(10*u, 40*u, 32*u, 8*u);
+      // Body
+      ctx.fillStyle = O; ctx.fillRect(12*u, 24*u, 28*u, 18*u);
+      ctx.fillStyle = W; ctx.fillRect(14*u, 22*u, 24*u, 18*u);
+      // Crown
+      ctx.fillStyle = O;
+      ctx.fillRect(10*u, 12*u, 32*u, 14*u);
+      // Crown points
+      ctx.fillStyle = '#c8960c';
+      ctx.fillRect(10*u, 6*u, 6*u, 8*u);
+      ctx.fillRect(24*u, 4*u, 4*u, 10*u);
+      ctx.fillRect(38*u, 6*u, 4*u, 8*u);
+      ctx.fillStyle = W;
+      ctx.fillRect(12*u, 10*u, 28*u, 14*u);
+      // Orb top
+      ctx.fillStyle = O;  ctx.fillRect(22*u, 4*u, 8*u, 4*u);
+      ctx.fillStyle = '#f5c542'; ctx.fillRect(24*u, 2*u, 4*u, 4*u);
+      // Highlights
+      ctx.fillStyle = H; ctx.fillRect(14*u, 22*u, 4*u, 4*u);
+      ctx.fillStyle = D; ctx.fillRect(34*u, 36*u, 4*u, 4*u);
+    },
+
+    _drawKing(W, O, H, D, S) {
+      const { ctx } = this;
+      const u = S / 52;
+      // Base
+      ctx.fillStyle = O; ctx.fillRect(8*u, 42*u, 36*u, 8*u);
+      ctx.fillStyle = W; ctx.fillRect(10*u, 40*u, 32*u, 8*u);
+      // Body
+      ctx.fillStyle = O; ctx.fillRect(12*u, 24*u, 28*u, 18*u);
+      ctx.fillStyle = W; ctx.fillRect(14*u, 22*u, 24*u, 18*u);
+      // Crown
+      ctx.fillStyle = O; ctx.fillRect(10*u, 12*u, 32*u, 14*u);
+      ctx.fillStyle = W; ctx.fillRect(12*u, 10*u, 28*u, 14*u);
+      // Cross
+      ctx.fillStyle = '#c8960c';
+      ctx.fillRect(24*u, 2*u, 4*u, 12*u);
+      ctx.fillRect(18*u, 6*u, 16*u, 4*u);
+      ctx.fillStyle = '#f5c542';
+      ctx.fillRect(25*u, 2*u, 2*u, 12*u);
+      ctx.fillRect(18*u, 7*u, 16*u, 2*u);
+      // Highlights
+      ctx.fillStyle = H; ctx.fillRect(14*u, 22*u, 4*u, 4*u);
+      ctx.fillStyle = D; ctx.fillRect(34*u, 36*u, 4*u, 4*u);
+    },
+
+    // Buff colors used for borders and icons
+    BUFF_COLORS: {
+      shield:'#f0c040', mirrorShield:'#7ab0ff', berserk:'#ff5020',
+      empower:'#ffd700', goldMagnet:'#e8a000', poison:'#30c060',
+      vengeance:'#ff3030', extraMove:'#70d030', captureBonus:'#ffcc00',
+      leech:'#44cc80', ironWill:'#4488ff', bounty:'#c060ff',
+      hex:'#a030e0', rally:'#30c0a0', sacrifice:'#ff7030', promote:'#d4c040',
+      freeze:'#88d8ff', leap:'#aaff44',
+    },
+
+    drawBuffOverlays(piece, x, y) {
+      if (piece.buffs.length === 0) return;
+      const { ctx, SQ, BUFF_COLORS } = this;
+      const primary = piece.buffs[0];
+      const tc = BUFF_COLORS[primary.kind] || '#aaa';
+
+      // Colored inner border — shows primary buff at a glance
+      ctx.save();
+      ctx.strokeStyle = tc;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x + 1.5, y + 1.5, SQ - 3, SQ - 3);
+      ctx.restore();
+
+      // Draw one integrated icon per buff along the bottom of the square
+      const SZ = 14;  // icon size in px
+      const PAD = 2;
+      const n = Math.min(piece.buffs.length, 3);
+      const totalW = n * SZ + (n - 1) * PAD;
+      let ix = x + Math.floor((SQ - totalW) / 2);
+      const iy = y + SQ - SZ - 2;
+
+      for (let i = 0; i < n; i++) {
+        const buff = piece.buffs[i];
+        this._drawBuffIcon(buff.kind, ix, iy, SZ, BUFF_COLORS[buff.kind] || '#888');
+        ix += SZ + PAD;
+      }
+    },
+
+    // Draw a 14×14 pixel-art icon for a buff at (bx, by)
+    _drawBuffIcon(kind, bx, by, sz, color) {
+      const { ctx } = this;
+      const p = sz / 14;   // 1 pixel at sz=14
+
+      ctx.save();
+
+      // Dark panel background for contrast against any piece color
+      ctx.fillStyle = 'rgba(8,4,2,0.80)';
+      ctx.fillRect(bx, by, sz, sz);
+
+      switch (kind) {
+
+        case 'goldMagnet': {
+          // Classic U-shaped magnet — red and blue poles, gold base bar
+          ctx.fillStyle = '#ff5050';
+          ctx.fillRect(bx+1*p, by+1*p, 3*p, 9*p);   // left arm (red pole)
+          ctx.fillStyle = '#5080ff';
+          ctx.fillRect(bx+10*p, by+1*p, 3*p, 9*p);  // right arm (blue pole)
+          ctx.fillStyle = '#e8a000';
+          ctx.fillRect(bx+1*p, by+10*p, 12*p, 3*p); // bottom bar (gold)
+          break;
+        }
+
+        case 'shield': {
+          // Pentagon shield with cross
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+2*p, by+1*p, 10*p, 8*p);  // main body
+          ctx.fillRect(bx+3*p, by+9*p, 8*p, 2*p);
+          ctx.fillRect(bx+5*p, by+11*p, 4*p, 2*p);  // bottom point
+          // Cross emblem on shield
+          ctx.fillStyle = 'rgba(0,0,0,0.45)';
+          ctx.fillRect(bx+6*p, by+2*p, 2*p, 7*p);   // vertical
+          ctx.fillRect(bx+3*p, by+4*p, 8*p, 2*p);   // horizontal
+          break;
+        }
+
+        case 'mirrorShield': {
+          // Diamond / rhombus with shine
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+5*p, by+1*p, 4*p, 2*p);
+          ctx.fillRect(bx+3*p, by+3*p, 8*p, 3*p);
+          ctx.fillRect(bx+1*p, by+5*p, 12*p, 3*p);
+          ctx.fillRect(bx+3*p, by+8*p, 8*p, 3*p);
+          ctx.fillRect(bx+5*p, by+11*p, 4*p, 2*p);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(bx+8*p, by+2*p, 2*p, 2*p);   // shine
+          break;
+        }
+
+        case 'berserk': {
+          // Flame — orange tip fading to yellow base
+          ctx.fillStyle = '#ff6600';
+          ctx.fillRect(bx+5*p, by+1*p, 4*p, 4*p);   // tip
+          ctx.fillRect(bx+3*p, by+3*p, 8*p, 4*p);   // upper body
+          ctx.fillStyle = '#ffcc00';
+          ctx.fillRect(bx+2*p, by+6*p, 10*p, 4*p);  // lower body
+          ctx.fillRect(bx+3*p, by+10*p, 8*p, 3*p);  // base
+          break;
+        }
+
+        case 'empower': {
+          // Lightning bolt (Z shape)
+          ctx.fillStyle = '#ffd700';
+          ctx.fillRect(bx+6*p, by+1*p, 6*p, 5*p);   // top block
+          ctx.fillRect(bx+3*p, by+5*p, 8*p, 4*p);   // middle bar
+          ctx.fillRect(bx+2*p, by+8*p, 6*p, 5*p);   // bottom block
+          // Cutouts for Z shape
+          ctx.fillStyle = 'rgba(8,4,2,0.80)';
+          ctx.fillRect(bx+3*p, by+2*p, 3*p, 3*p);
+          ctx.fillRect(bx+8*p, by+9*p, 3*p, 3*p);
+          break;
+        }
+
+        case 'vengeance': {
+          // Skull with eye sockets and teeth
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+3*p, by+1*p, 8*p, 1*p);   // top curve
+          ctx.fillRect(bx+2*p, by+2*p, 10*p, 7*p);  // skull body
+          ctx.fillRect(bx+3*p, by+9*p, 8*p, 1*p);   // jaw top
+          ctx.fillRect(bx+3*p, by+10*p, 2*p, 3*p);  // left tooth
+          ctx.fillRect(bx+7*p, by+10*p, 1*p, 2*p);  // gap fill
+          ctx.fillRect(bx+9*p, by+10*p, 2*p, 3*p);  // right tooth
+          // Eye sockets
+          ctx.fillStyle = 'rgba(8,4,2,0.90)';
+          ctx.fillRect(bx+3*p, by+3*p, 3*p, 3*p);   // left eye
+          ctx.fillRect(bx+8*p, by+3*p, 3*p, 3*p);   // right eye
+          ctx.fillRect(bx+6*p, by+7*p, 2*p, 1*p);   // nose
+          break;
+        }
+
+        case 'poison': {
+          // Teardrop / drip in green
+          ctx.fillStyle = '#30c060';
+          ctx.fillRect(bx+5*p, by+1*p, 4*p, 2*p);   // top
+          ctx.fillRect(bx+4*p, by+3*p, 6*p, 3*p);
+          ctx.fillRect(bx+3*p, by+5*p, 8*p, 4*p);   // wide middle
+          ctx.fillRect(bx+4*p, by+9*p, 6*p, 2*p);
+          ctx.fillRect(bx+5*p, by+11*p, 4*p, 2*p);  // drip tip
+          break;
+        }
+
+        case 'leech': {
+          // Upward arrow (steal / siphon)
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+6*p, by+1*p, 2*p, 2*p);   // tip
+          ctx.fillRect(bx+5*p, by+3*p, 4*p, 2*p);
+          ctx.fillRect(bx+3*p, by+5*p, 8*p, 3*p);   // arrowhead base
+          ctx.fillRect(bx+5*p, by+7*p, 4*p, 6*p);   // shaft
+          break;
+        }
+
+        case 'ironWill': {
+          // Bold plus cross (armor symbol)
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+5*p, by+1*p, 4*p, 12*p);  // vertical
+          ctx.fillRect(bx+1*p, by+5*p, 12*p, 4*p);  // horizontal
+          break;
+        }
+
+        case 'extraMove': {
+          // Two upward arrows side-by-side
+          ctx.fillStyle = color;
+          // Left arrow
+          ctx.fillRect(bx+1*p, by+5*p, 2*p, 2*p);
+          ctx.fillRect(bx+2*p, by+3*p, 2*p, 2*p);
+          ctx.fillRect(bx+3*p, by+1*p, 2*p, 9*p);
+          ctx.fillRect(bx+2*p, by+7*p, 2*p, 2*p);
+          ctx.fillRect(bx+1*p, by+9*p, 2*p, 2*p);
+          // Right arrow
+          ctx.fillRect(bx+8*p, by+5*p, 2*p, 2*p);
+          ctx.fillRect(bx+9*p, by+3*p, 2*p, 2*p);
+          ctx.fillRect(bx+10*p, by+1*p, 2*p, 9*p);
+          ctx.fillRect(bx+9*p, by+7*p, 2*p, 2*p);
+          ctx.fillRect(bx+8*p, by+9*p, 2*p, 2*p);
+          break;
+        }
+
+        case 'captureBonus': {
+          // 4-pointed sparkle star
+          ctx.fillStyle = '#ffcc00';
+          ctx.fillRect(bx+5*p, by+1*p, 4*p, 12*p);  // vertical spike
+          ctx.fillRect(bx+1*p, by+5*p, 12*p, 4*p);  // horizontal spike
+          ctx.fillRect(bx+3*p, by+3*p, 2*p, 2*p);   // NW diagonal
+          ctx.fillRect(bx+9*p, by+3*p, 2*p, 2*p);   // NE diagonal
+          ctx.fillRect(bx+3*p, by+9*p, 2*p, 2*p);   // SW diagonal
+          ctx.fillRect(bx+9*p, by+9*p, 2*p, 2*p);   // SE diagonal
+          break;
+        }
+
+        case 'bounty': {
+          // Coin bag with rope knot
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+5*p, by+0*p, 4*p, 3*p);   // rope knot
+          ctx.fillRect(bx+3*p, by+3*p, 8*p, 1*p);   // bag top
+          ctx.fillRect(bx+2*p, by+4*p, 10*p, 7*p);  // bag body
+          ctx.fillRect(bx+3*p, by+11*p, 8*p, 2*p);  // bag bottom
+          // $ symbol
+          ctx.fillStyle = 'rgba(8,4,2,0.65)';
+          ctx.fillRect(bx+4*p, by+5*p, 6*p, 1*p);
+          ctx.fillRect(bx+3*p, by+6*p, 3*p, 1*p);
+          ctx.fillRect(bx+4*p, by+7*p, 6*p, 1*p);
+          ctx.fillRect(bx+8*p, by+8*p, 3*p, 1*p);
+          ctx.fillRect(bx+4*p, by+9*p, 6*p, 1*p);
+          ctx.fillRect(bx+6*p, by+4*p, 2*p, 7*p);   // center vertical
+          break;
+        }
+
+        case 'hex': {
+          // Hexagon with evil eye inside
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+4*p, by+1*p, 6*p, 2*p);
+          ctx.fillRect(bx+2*p, by+3*p, 10*p, 8*p);
+          ctx.fillRect(bx+4*p, by+11*p, 6*p, 2*p);
+          // Eye white
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(bx+4*p, by+4*p, 6*p, 6*p);
+          // Pupil
+          ctx.fillStyle = 'rgba(8,4,2,0.9)';
+          ctx.fillRect(bx+5*p, by+5*p, 4*p, 4*p);
+          // Glow pupil center
+          ctx.fillStyle = '#cc00ff';
+          ctx.fillRect(bx+6*p, by+6*p, 2*p, 2*p);
+          break;
+        }
+
+        case 'rally': {
+          // Waving flag on pole
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+2*p, by+1*p, 2*p, 13*p);  // flag pole
+          ctx.fillRect(bx+4*p, by+1*p, 9*p, 6*p);   // flag body
+          // Dark stripe on flag
+          ctx.fillStyle = 'rgba(8,4,2,0.35)';
+          ctx.fillRect(bx+4*p, by+3*p, 9*p, 2*p);
+          break;
+        }
+
+        case 'sacrifice': {
+          // Cross / holy sacrifice
+          ctx.fillStyle = '#cc6620';
+          ctx.fillRect(bx+5*p, by+1*p, 4*p, 12*p);  // vertical beam
+          ctx.fillRect(bx+2*p, by+4*p, 10*p, 4*p);  // horizontal beam
+          break;
+        }
+
+        case 'promote': {
+          // Crown with upward arrow below
+          ctx.fillStyle = color;
+          // Crown prongs
+          ctx.fillRect(bx+1*p, by+1*p, 2*p, 5*p);
+          ctx.fillRect(bx+6*p, by+0*p, 2*p, 5*p);
+          ctx.fillRect(bx+11*p, by+1*p, 2*p, 5*p);
+          // Crown base band
+          ctx.fillRect(bx+1*p, by+5*p, 12*p, 3*p);
+          // Arrow shaft below crown
+          ctx.fillRect(bx+5*p, by+8*p, 4*p, 5*p);
+          // Arrow head
+          ctx.fillRect(bx+3*p, by+6*p, 2*p, 2*p);
+          ctx.fillRect(bx+9*p, by+6*p, 2*p, 2*p);
+          break;
+        }
+
+        case 'freeze': {
+          // Snowflake — 6-pointed star with center dot
+          ctx.fillStyle = '#88d8ff';
+          // Vertical spine
+          ctx.fillRect(bx+6*p, by+1*p, 2*p, 12*p);
+          // Horizontal arm
+          ctx.fillRect(bx+1*p, by+6*p, 12*p, 2*p);
+          // Diagonal arms (NW-SE and NE-SW approximated with px squares)
+          ctx.fillRect(bx+2*p, by+2*p, 2*p, 2*p);
+          ctx.fillRect(bx+4*p, by+4*p, 2*p, 2*p);
+          ctx.fillRect(bx+8*p, by+8*p, 2*p, 2*p);
+          ctx.fillRect(bx+10*p, by+10*p, 2*p, 2*p);
+          ctx.fillRect(bx+10*p, by+2*p, 2*p, 2*p);
+          ctx.fillRect(bx+8*p, by+4*p, 2*p, 2*p);
+          ctx.fillRect(bx+4*p, by+8*p, 2*p, 2*p);
+          ctx.fillRect(bx+2*p, by+10*p, 2*p, 2*p);
+          // Bright center
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(bx+5*p, by+5*p, 4*p, 4*p);
+          break;
+        }
+
+        case 'leap': {
+          // Spring / arc — coil shape suggesting jumping
+          ctx.fillStyle = '#aaff44';
+          // Arc top (wide)
+          ctx.fillRect(bx+3*p, by+1*p, 8*p, 2*p);
+          // Left side down
+          ctx.fillRect(bx+1*p, by+3*p, 2*p, 3*p);
+          // Right side down
+          ctx.fillRect(bx+11*p, by+3*p, 2*p, 3*p);
+          // Middle cross-bar
+          ctx.fillRect(bx+3*p, by+6*p, 8*p, 2*p);
+          // Left side down again
+          ctx.fillRect(bx+1*p, by+8*p, 2*p, 3*p);
+          // Right side down again
+          ctx.fillRect(bx+11*p, by+8*p, 2*p, 3*p);
+          // Bottom base (landing arrow)
+          ctx.fillRect(bx+4*p, by+11*p, 6*p, 2*p);
+          // Arrowhead nubs
+          ctx.fillRect(bx+6*p, by+13*p, 2*p, 1*p);
+          break;
+        }
+
+        default: {
+          ctx.fillStyle = color;
+          ctx.fillRect(bx+3*p, by+3*p, 8*p, 8*p);
+          break;
+        }
+      }
+
+      // Pixel border
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx + 0.5, by + 0.5, sz - 1, sz - 1);
+
+      ctx.restore();
+    },
+
+    drawAllPieces() {
+      if (!State.board) return;
+      const { SQ } = this;
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = State.board[r][c];
+          if (!piece) continue;
+          this.drawPiece(piece, c * SQ, r * SQ);
+          if (piece.buffs.length > 0) this.drawBuffOverlays(piece, c * SQ, r * SQ);
+        }
+      }
+    },
+  };
+
+  // ─── GAME ────────────────────────────────────────────────────
+  const Game = {
+    start(mode, difficulty) {
+      resetState(mode, difficulty);
+      document.getElementById('mode-info').textContent =
+        mode === 'vsAI' ? 'VS AI (' + difficulty.toUpperCase() + ')' : '2 PLAYER';
+      Economy.rollShop('white');
+      Economy.rollShop('black');
+      UI.showGame();
+      // Update panel labels to show which side the human controls
+      if (mode === 'vsAI') {
+        document.getElementById('white-label').textContent =
+          State.humanColor === 'white' ? 'WHITE — YOU' : 'WHITE — AI';
+        document.getElementById('black-label').textContent =
+          State.humanColor === 'black' ? 'BLACK — YOU' : 'BLACK — AI';
+      } else {
+        document.getElementById('white-label').textContent = 'WHITE PLAYER';
+        document.getElementById('black-label').textContent = 'BLACK PLAYER';
+      }
+      UI.updateHUD();
+      // If AI plays white, trigger its first move after a short delay
+      if (mode === 'vsAI' && State.aiColor === 'white') {
+        setTimeout(() => AI.takeTurn(), 600);
+      }
+    },
+
+    restart() {
+      document.getElementById('gameover-modal').hidden = true;
+      Game.start(State.mode, State.difficulty);
+    },
+
+    resign(color) {
+      if (State.phase !== 'playing') return;
+      State.phase = 'gameover';
+      State.winner = Chess.opponent(color);
+      UI.showGameOver(State.winner);
+      SFX.play('win');
+    },
+
+    executeMove(fromRow, fromCol, toRow, toCol, special) {
+      const piece    = State.board[fromRow][fromCol];
+      const captured = State.board[toRow][toCol];
+
+      // Mirror Shield check: block capture + strip attacker's newest buff
+      if (captured && captured.buffs.some(b => b.kind === 'mirrorShield')) {
+        const idx = captured.buffs.findIndex(b => b.kind === 'mirrorShield');
+        captured.buffs.splice(idx, 1);
+        if (piece.buffs.length > 0) piece.buffs.pop();
+        State.selected = null; State.validMoves = [];
+        Anim.shieldBreak(toRow, toCol);
+        SFX.play('shieldBreak');
+        UI.setStatus('Mirror Shield! Capture blocked, attacker lost a buff!');
+        UI.updateHUD();
+        return;
+      }
+
+      // Shield check: cancel capture if target is shielded
+      if (captured && captured.buffs.some(b => b.kind === 'shield')) {
+        const shieldIdx = captured.buffs.findIndex(b => b.kind === 'shield');
+        captured.buffs.splice(shieldIdx, 1);
+        State.selected = null;
+        State.validMoves = [];
+        Anim.shieldBreak(toRow, toCol);
+        SFX.play('shieldBreak');
+        UI.setStatus('Shield absorbed the capture!');
+        UI.updateHUD();
+        return;
+      }
+
+      // Apply move
+      State.board[toRow][toCol] = piece;
+      State.board[fromRow][fromCol] = null;
+
+      // En passant removal
+      if (special === 'enPassant') {
+        const dir = piece.color === 'white' ? 1 : -1;
+        State.board[toRow + dir][toCol] = null;
+      }
+
+      // Castling — move rook
+      if (special === 'castleK') {
+        State.board[toRow][5] = State.board[toRow][7];
+        State.board[toRow][7] = null;
+      }
+      if (special === 'castleQ') {
+        State.board[toRow][3] = State.board[toRow][0];
+        State.board[toRow][0] = null;
+      }
+
+      // Update castling rights
+      if (piece.type === 'king') {
+        State.castlingRights[piece.color].k = false;
+        State.castlingRights[piece.color].q = false;
+      }
+      if (piece.type === 'rook') {
+        if (fromCol === 7) State.castlingRights[piece.color].k = false;
+        if (fromCol === 0) State.castlingRights[piece.color].q = false;
+      }
+
+      // En passant target for next turn
+      State.enPassantTarget = (piece.type === 'pawn' && Math.abs(toRow - fromRow) === 2)
+        ? { row: (fromRow + toRow) / 2, col: toCol } : null;
+
+      // Trap tile trigger (Iron Will makes piece immune)
+      const trap = State.traps.find(t => t.row === toRow && t.col === toCol);
+      if (trap && trap.owner !== piece.color && !piece.buffs.some(b => b.kind === 'ironWill')) {
+        if (piece.buffs.length > 0) {
+          piece.buffs.shift();
+          Anim.trapTrigger(toRow, toCol);
+          SFX.play('trap');
+          UI.setStatus('Trap triggered! Lost oldest buff.');
+        }
+        State.traps = State.traps.filter(t => t !== trap);
+      }
+
+      // Award coins
+      let earned = Economy.awardCoins(piece.color, !!captured, captured?.type, piece);
+      State.movesMadeThisTurn++;
+
+      // Gold Magnet: bonus coins per square moved
+      if (piece.buffs.some(b => b.kind === 'goldMagnet')) {
+        const dist = Math.max(Math.abs(toRow - fromRow), Math.abs(toCol - fromCol));
+        const mag = dist * 4;
+        State.wallets[piece.color] += mag;
+        earned += mag;
+      }
+
+      // Animations
+      Anim.coinFloat(toRow, toCol, '+' + earned + 'g');
+      SFX.play('coin');
+
+      if (captured) {
+        const opp = piece.color === 'white' ? 'black' : 'white';
+        Anim.captureFlash(toRow, toCol);
+        SFX.play('capture');
+
+        // Bounty: punish attacker
+        if (captured.buffs.some(b => b.kind === 'bounty')) {
+          State.wallets[piece.color] = Math.max(0, State.wallets[piece.color] - 40);
+          Anim.coinFloat(toRow, toCol, '-40g');
+          UI.setStatus('Bounty! ' + piece.color + ' loses 40g!');
+        }
+        // Hex: attacker earns no capture bonus (subtract the bonus portion)
+        if (captured.buffs.some(b => b.kind === 'hex')) {
+          const refund = Economy.CAPTURE_BONUS[captured.type] || 0;
+          State.wallets[piece.color] = Math.max(0, State.wallets[piece.color] - refund);
+          UI.setStatus('HEX! Capture bonus negated.');
+        }
+        // Poison: each capture costs opponent coins
+        if (piece.buffs.some(b => b.kind === 'poison')) {
+          State.wallets[opp] = Math.max(0, State.wallets[opp] - 30);
+          Anim.coinFloat(toRow, toCol, 'POISONED!');
+        }
+        // Leech: steal coins from opponent
+        if (piece.buffs.some(b => b.kind === 'leech')) {
+          const stolen = Math.min(30, State.wallets[opp]);
+          State.wallets[opp] -= stolen;
+          State.wallets[piece.color] += stolen;
+        }
+        // Vengeance: attacker is also destroyed (mutual capture)
+        if (captured.buffs.some(b => b.kind === 'vengeance')) {
+          State.board[toRow][toCol] = null;
+          State.capturedPieces[opp].push(piece);
+          Anim.captureFlash(toRow, toCol);
+          UI.setStatus('VENGEANCE! Both pieces destroyed!');
+        }
+        // Track captured pieces (if piece survived vengeance it's already gone)
+        State.capturedPieces[piece.color].push(captured);
+      } else {
+        SFX.play('move');
+      }
+
+      // Pawn promotion
+      if (Chess.isPawnPromotion(piece, toRow)) {
+        UI.showPromoModal(fromRow, fromCol, toRow, toCol, special, captured);
+        return;
+      }
+
+      Game.afterMove(fromRow, fromCol, toRow, toCol, captured);
+    },
+
+    afterMove(fromRow, fromCol, toRow, toCol, captured) {
+      const piece = State.board[toRow][toCol];
+      const cols  = 'abcdefgh';
+      const ranks = '87654321';
+      const notation = (piece.type !== 'pawn' ? piece.type[0].toUpperCase() : '') +
+        cols[toCol] + ranks[toRow];
+
+      State.moveHistory.push({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, piece: piece.type, captured: captured?.type, notation });
+      const logEl = document.getElementById('log-' + piece.color);
+      const entry = document.createElement('div');
+      entry.className = 'move-log latest';
+      entry.textContent = State.moveHistory.length + '. ' + notation;
+      logEl.querySelectorAll('.latest').forEach(e => e.classList.remove('latest'));
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+
+      if (captured) {
+        const sym = { pawn:'♟', knight:'♞', bishop:'♝', rook:'♜', queen:'♛', king:'♚' };
+        const capRow = document.getElementById('captured-' + piece.color);
+        const cell = document.createElement('div');
+        cell.className = 'cap-piece';
+        cell.textContent = sym[captured.type] || '?';
+        capRow.appendChild(cell);
+      }
+
+      State.selected = null;
+      State.validMoves = [];
+      State.moveCount++;
+
+      const opp = Chess.opponent(piece.color);
+      if (Chess.isCheckmate(opp)) {
+        State.phase = 'gameover';
+        State.winner = piece.color;
+        UI.showGameOver(piece.color);
+        SFX.play('win');
+        return;
+      }
+      if (Chess.isStalemate(opp)) {
+        State.phase = 'gameover';
+        State.winner = 'draw';
+        UI.showGameOver('draw');
+        return;
+      }
+      if (Chess.isInCheck(State.board, opp, State.enPassantTarget)) {
+        SFX.play('check');
+        Anim.checkPulse(Chess.findKing(State.board, opp));
+      }
+
+      UI.updateHUD();
+    },
+
+    endTurn() {
+      if (State.movesMadeThisTurn === 0) return;
+      const current = State.turn;
+      Economy.tickBuffs(current);
+      State.turn = Chess.opponent(current);
+      State.movesMadeThisTurn = 0;
+      State.rerollCount = 0;  // reset escalating cost for the new player's turn
+      // Roll fresh shop for the player whose turn is starting
+      Economy.rollShop(State.turn);
+      UI.updateHUD();
+      UI.setStatus("It's " + State.turn + "'s turn");
+
+      if (State.mode === 'vsAI' && State.turn === State.aiColor) {
+        setTimeout(() => AI.takeTurn(), 400);
+      }
+    },
+  };
+
+  // ─── BOOT ────────────────────────────────────────────────────
+  Render.init();
+  Render.startLoop();
+  UI.init();
+  </script>
+</body>
+</html>
