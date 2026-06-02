@@ -224,6 +224,59 @@
     }
     .diff-btn:hover { border-color: #f5c542; color: #f5c542; }
 
+    /* === HELP MODAL === */
+    #help-modal .modal-box {
+      width: 680px; max-width: 95vw;
+      text-align: left; padding: 20px 24px 24px;
+    }
+    #help-modal h2 { text-align: center; margin-bottom: 14px; }
+    .help-tabs {
+      display: flex; gap: 4px; margin-bottom: 14px;
+      border-bottom: 1px solid #2a2206; padding-bottom: 10px;
+    }
+    .help-tab {
+      background: #0c0a06; border: 1px solid #3a2e08; color: #6a5820;
+      font-family: 'Press Start 2P', monospace; font-size: 6px;
+      padding: 6px 10px; cursor: pointer; letter-spacing: 0.5px;
+      flex: 1; text-align: center;
+    }
+    .help-tab:hover { border-color: #f5c542; color: #c8a030; }
+    .help-tab.active { border-color: #f5c542; color: #f5c542; background: #1a1506; }
+    .help-pane { display: none; }
+    .help-pane.active { display: block; }
+    .help-scroll {
+      max-height: 420px; overflow-y: auto;
+      padding-right: 6px; scrollbar-width: thin;
+      scrollbar-color: #3a2e08 #0c0a06;
+    }
+    .help-scroll::-webkit-scrollbar { width: 5px; }
+    .help-scroll::-webkit-scrollbar-track { background: #0c0a06; }
+    .help-scroll::-webkit-scrollbar-thumb { background: #3a2e08; }
+    .help-h2 { font-size: 7px; color: #f5c542; margin: 10px 0 6px; letter-spacing: 1px; }
+    .help-h2:first-child { margin-top: 0; }
+    .help-p { font-size: 6px; color: #6a5820; line-height: 2.1; margin-bottom: 6px; }
+    .help-p b { color: #c8a030; }
+    .help-rule { font-size: 6px; color: #4a3e18; line-height: 2.2; padding-left: 8px; }
+    .help-rule::before { content: '▸ '; color: #5a4820; }
+    /* Economy table */
+    .help-table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
+    .help-table th { font-size: 5px; color: #f5c542; text-align: left; padding: 4px 8px; border-bottom: 1px solid #2a2206; letter-spacing: 1px; }
+    .help-table td { font-size: 6px; color: #6a5820; padding: 4px 8px; border-bottom: 1px solid #1a1606; }
+    .help-table td:first-child { color: #c8a030; }
+    /* Item grid */
+    .help-items { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0; }
+    .help-item {
+      background: #0c0a06; border: 1px solid #2a2206;
+      padding: 7px 9px;
+    }
+    .help-item.special { border-color: #3a1a50; }
+    .help-item-top { display: flex; align-items: baseline; gap: 6px; margin-bottom: 3px; }
+    .help-item-name { font-size: 6px; color: #c8a030; }
+    .help-item.special .help-item-name { color: #c060ff; }
+    .help-item-cost { font-size: 5px; color: #f5c542; margin-left: auto; }
+    .help-item-desc { font-size: 5px; color: #4a3820; line-height: 1.8; }
+    .help-item-target { font-size: 5px; color: #5a4820; margin-top: 2px; font-style: italic; }
+
     /* === COIN BOOST SHIMMER === */
     @keyframes shimmer {
       0%   { box-shadow: 0 0 6px #f5c54244; }
@@ -248,6 +301,7 @@
     </div>
     <button class="menu-btn" id="btn-2p">2 PLAYER</button>
     <button class="menu-btn" id="btn-settings" style="font-size:8px; padding:10px 32px;">SETTINGS</button>
+    <button class="menu-btn" id="btn-help" style="font-size:8px; padding:10px 32px;">? HOW TO PLAY</button>
   </div>
 
   <!-- ═══ SETTINGS OVERLAY ═══ -->
@@ -258,6 +312,228 @@
       <button class="modal-btn" id="btn-toggle-sound">TOGGLE SOUND</button>
       <br>
       <button class="modal-btn" id="btn-close-settings">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- ═══ HELP MODAL ═══ -->
+  <div id="help-modal" class="modal-overlay" hidden>
+    <div class="modal-box">
+      <h2>📖 HOW TO PLAY</h2>
+      <div class="help-tabs">
+        <button class="help-tab active" data-pane="basics">BASICS</button>
+        <button class="help-tab" data-pane="economy">ECONOMY</button>
+        <button class="help-tab" data-pane="equipment">EQUIPMENT</button>
+        <button class="help-tab" data-pane="exclusives">EXCLUSIVES</button>
+      </div>
+
+      <!-- ── BASICS ── -->
+      <div class="help-pane active" id="help-pane-basics">
+        <div class="help-scroll">
+          <div class="help-h2">GOAL</div>
+          <p class="help-p">Checkmate the enemy king. Use gold earned from moves and captures to buy power-ups that shift the odds in your favour.</p>
+
+          <div class="help-h2">CHESS RULES</div>
+          <p class="help-rule">Each player moves one piece per turn (unless BLITZ or EXTRA MOVE is active).</p>
+          <p class="help-rule">A piece captures by moving onto an enemy square.</p>
+          <p class="help-rule">You cannot make a move that leaves your king in check.</p>
+          <p class="help-rule"><b>Castling</b> — king and unmoved rook swap if no pieces between them and neither is in check.</p>
+          <p class="help-rule"><b>En passant</b> — a pawn that just moved two squares can be captured diagonally by an adjacent enemy pawn on the very next move.</p>
+          <p class="help-rule"><b>Promotion</b> — when a pawn reaches the far rank, choose queen, rook, bishop, or knight.</p>
+
+          <div class="help-h2">TURN STRUCTURE</div>
+          <p class="help-rule">Make your move on the board.</p>
+          <p class="help-rule">Optionally buy items from the shop (your turn only).</p>
+          <p class="help-rule">Click <b>END TURN</b> to pass to your opponent.</p>
+          <p class="help-rule">A fresh shop rolls automatically at the start of your turn.</p>
+
+          <div class="help-h2">BOARD ORIENTATION</div>
+          <p class="help-rule"><b>VS AI</b> — your pieces are always at the bottom, regardless of colour.</p>
+          <p class="help-rule"><b>2 PLAYER</b> — the board flips every turn so the active player always faces down.</p>
+
+          <div class="help-h2">AI DIFFICULTY</div>
+          <p class="help-rule"><b>Easy</b> — shallow search, plays randomly among good moves.</p>
+          <p class="help-rule"><b>Medium</b> — standard minimax, balanced play.</p>
+          <p class="help-rule"><b>Hard</b> — deeper search, prioritises captures and king safety.</p>
+        </div>
+      </div>
+
+      <!-- ── ECONOMY ── -->
+      <div class="help-pane" id="help-pane-economy">
+        <div class="help-scroll">
+          <div class="help-h2">EARNING GOLD</div>
+          <p class="help-p">Gold (g) is earned every time you move or capture. Spend it in the shop to buy buffs.</p>
+          <table class="help-table">
+            <tr><th>ACTION</th><th>GOLD EARNED</th></tr>
+            <tr><td>Any move</td><td>+15g</td></tr>
+            <tr><td>Capture a pawn</td><td>+15g bonus</td></tr>
+            <tr><td>Capture a knight</td><td>+30g bonus</td></tr>
+            <tr><td>Capture a bishop</td><td>+30g bonus</td></tr>
+            <tr><td>Capture a rook</td><td>+40g bonus</td></tr>
+            <tr><td>Capture a queen</td><td>+60g bonus</td></tr>
+          </table>
+
+          <div class="help-h2">THE SHOP</div>
+          <p class="help-rule">Each turn you get <b>3 EQUIPMENT</b> items and <b>3 EXCLUSIVES</b> drawn from the full pool at random.</p>
+          <p class="help-rule">Click an item to target a piece (or apply instantly for board effects).</p>
+          <p class="help-rule">Each item can only be bought once per roll — rerolling restocks all slots.</p>
+          <p class="help-rule">You can only shop on your own turn.</p>
+
+          <div class="help-h2">REROLLING</div>
+          <p class="help-rule">First reroll costs <b>10g</b>. Each additional reroll this turn costs <b>+10g more</b>.</p>
+          <p class="help-rule">The cost resets at the start of your next turn.</p>
+
+          <div class="help-h2">COIN BOOST</div>
+          <p class="help-rule">The <b>COIN BOOST</b> exclusive multiplies all your earnings by <b>×1.5</b> for 3 turns. A gold shimmer appears around the board while active.</p>
+
+          <div class="help-h2">RESIGN</div>
+          <p class="help-rule">Click the <b>RESIGN</b> button on your panel at any time to forfeit the game.</p>
+        </div>
+      </div>
+
+      <!-- ── EQUIPMENT ── -->
+      <div class="help-pane" id="help-pane-equipment">
+        <div class="help-scroll">
+          <p class="help-p" style="margin-bottom:8px;">Equipment buffs attach to a <b>specific piece</b> you click after buying. Most wear off after a set number of turns (shown in brackets).</p>
+          <div class="help-items">
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">SHIELD</span><span class="help-item-cost">80g</span></div>
+              <div class="help-item-desc">The piece survives one capture attempt — the attacker is blocked and loses their newest buff.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">MIRROR SHIELD</span><span class="help-item-cost">90g</span></div>
+              <div class="help-item-desc">Like Shield but also strips one buff from the attacker when blocking the capture.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">EXTRA MOVE</span><span class="help-item-cost">60g</span></div>
+              <div class="help-item-desc">Piece can move to any square it could normally reach plus all extended ray squares for 3 turns. Knights get a refund — they already leap.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">LEAP</span><span class="help-item-cost">70g</span></div>
+              <div class="help-item-desc">Piece ignores blocking pieces and jumps to any square along its movement rays for 4 turns.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">FREEZE</span><span class="help-item-cost">65g</span></div>
+              <div class="help-item-desc">Locks an enemy piece in place — it cannot move for 3 turns. Cannot freeze the king.</div>
+              <div class="help-item-target">→ Click an ENEMY piece</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">CAP BONUS</span><span class="help-item-cost">40g</span></div>
+              <div class="help-item-desc">Piece earns an extra +20g on top of normal capture coins for the next 2 turns.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">BERSERK</span><span class="help-item-cost">50g</span></div>
+              <div class="help-item-desc">Piece earns +35g extra per capture for 2 turns.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">EMPOWER</span><span class="help-item-cost">80g</span></div>
+              <div class="help-item-desc">Doubles all capture gold earned by this piece for 2 turns. Stacks with other bonuses.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">LEECH</span><span class="help-item-cost">50g</span></div>
+              <div class="help-item-desc">Each time this piece captures, it steals 30g directly from the opponent's wallet for 2 turns.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">GOLD MAGNET</span><span class="help-item-cost">45g</span></div>
+              <div class="help-item-desc">Earns +4g for every square this piece moves (not captures) for 3 turns.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">BOUNTY</span><span class="help-item-cost">35g</span></div>
+              <div class="help-item-desc">If this piece is captured, the attacker immediately loses 35g from their wallet.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">VENGEANCE</span><span class="help-item-cost">60g</span></div>
+              <div class="help-item-desc">If this piece is captured, the capturing piece is also removed from the board.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">POISON</span><span class="help-item-cost">55g</span></div>
+              <div class="help-item-desc">Any time this piece captures, the opponent loses an extra 30g for 3 turns.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">HEX</span><span class="help-item-cost">30g</span></div>
+              <div class="help-item-desc">If this cursed piece is captured, the opponent earns zero coins from that capture for 3 turns.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">IRON WILL</span><span class="help-item-cost">30g</span></div>
+              <div class="help-item-desc">Piece is immune to trap tiles on the board for 3 turns.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">RALLY</span><span class="help-item-cost">20g</span></div>
+              <div class="help-item-desc">Instantly earn +12g for every friendly piece within 2 squares of this piece right now.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">SACRIFICE</span><span class="help-item-cost">30g</span></div>
+              <div class="help-item-desc">Remove this piece from the board immediately and gain 65g. Useful for clearing pawns for cash.</div>
+              <div class="help-item-target">→ Click any of your pieces</div>
+            </div>
+            <div class="help-item">
+              <div class="help-item-top"><span class="help-item-name">PROMOTE</span><span class="help-item-cost">55g</span></div>
+              <div class="help-item-desc">Instantly upgrades a pawn to a knight anywhere on the board, no need to reach the back rank.</div>
+              <div class="help-item-target">→ Click one of your pawns</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── EXCLUSIVES ── -->
+      <div class="help-pane" id="help-pane-exclusives">
+        <div class="help-scroll">
+          <p class="help-p" style="margin-bottom:8px;">Exclusives are <b>board-wide effects</b> that apply instantly — no targeting required. Only 3 are offered per turn, drawn randomly.</p>
+          <div class="help-items">
+            <div class="help-item special">
+              <div class="help-item-top"><span class="help-item-name">COIN BOOST</span><span class="help-item-cost">100g</span></div>
+              <div class="help-item-desc">All gold you earn from moves and captures is multiplied by ×1.5 for the next 3 turns. A shimmer glows around the board while active.</div>
+              <div class="help-item-target">→ Applies instantly</div>
+            </div>
+            <div class="help-item special">
+              <div class="help-item-top"><span class="help-item-name">TRAP TILE</span><span class="help-item-cost">120g</span></div>
+              <div class="help-item-desc">Place a hidden trap on any empty square. When an enemy piece lands on it, that piece loses one of its buffs. Marked with a red X for you to see.</div>
+              <div class="help-item-target">→ Click an empty square to place</div>
+            </div>
+            <div class="help-item special">
+              <div class="help-item-top"><span class="help-item-name">BLITZ</span><span class="help-item-cost">90g</span></div>
+              <div class="help-item-desc">Move two pieces this turn instead of one. The second move must still be legal. Great for opening attacks or repositioning.</div>
+              <div class="help-item-target">→ Applies instantly this turn</div>
+            </div>
+            <div class="help-item special">
+              <div class="help-item-top"><span class="help-item-name">GOLD STEAL</span><span class="help-item-cost">70g</span></div>
+              <div class="help-item-desc">Instantly takes 30g directly from your opponent's wallet and adds it to yours. They can't go below 0g.</div>
+              <div class="help-item-target">→ Applies instantly</div>
+            </div>
+            <div class="help-item special">
+              <div class="help-item-top"><span class="help-item-name">GOLD RUSH</span><span class="help-item-cost">60g</span></div>
+              <div class="help-item-desc">Your very next capture earns an extra +40g on top of all other bonuses. One-time effect, consumed on capture.</div>
+              <div class="help-item-target">→ Applies instantly</div>
+            </div>
+          </div>
+          <div class="help-h2" style="margin-top:12px;">BUFF ICONS</div>
+          <p class="help-p">Each buff is shown as a small coloured icon in the corner of the piece's square. A coloured border around the square shows the primary buff at a glance. Up to 3 icons are shown per piece.</p>
+          <div class="help-h2">TIPS</div>
+          <p class="help-rule">Stack <b>EMPOWER</b> + <b>CAP BONUS</b> on an attacking piece for massive coin bursts.</p>
+          <p class="help-rule"><b>VENGEANCE</b> on a queen forces opponents to think twice before capturing it.</p>
+          <p class="help-rule"><b>TRAP TILE</b> on a square your opponent is forced to pass through is devastating.</p>
+          <p class="help-rule"><b>BLITZ</b> + a well-placed fork can win material in one turn.</p>
+          <p class="help-rule"><b>FREEZE</b> their queen, then attack around it freely.</p>
+        </div>
+      </div>
+
+      <div style="text-align:center; margin-top:14px;">
+        <button class="modal-btn" id="btn-close-help">CLOSE</button>
+      </div>
     </div>
   </div>
 
@@ -994,6 +1270,28 @@
       document.getElementById('btn-vsai').addEventListener('click', () => UI.showDiffSelect());
       document.getElementById('btn-2p').addEventListener('click', () => Game.start('twoPlayer', 'medium'));
       document.getElementById('btn-settings').addEventListener('click', () => UI.showSettings());
+
+      // ── Help modal ──
+      document.getElementById('btn-help').addEventListener('click', () => {
+        document.getElementById('help-modal').hidden = false;
+      });
+      document.getElementById('btn-close-help').addEventListener('click', () => {
+        document.getElementById('help-modal').hidden = true;
+      });
+      document.querySelectorAll('.help-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.help-pane').forEach(p => p.classList.remove('active'));
+          tab.classList.add('active');
+          document.getElementById('help-pane-' + tab.dataset.pane).classList.add('active');
+        });
+      });
+      // Close help modal on backdrop click
+      document.getElementById('help-modal').addEventListener('click', e => {
+        if (e.target === document.getElementById('help-modal'))
+          document.getElementById('help-modal').hidden = true;
+      });
+
       document.getElementById('btn-toggle-sound').addEventListener('click', () => {
         State.soundEnabled = !State.soundEnabled;
         document.getElementById('sound-label').textContent = 'SOUND: ' + (State.soundEnabled ? 'ON' : 'OFF');
