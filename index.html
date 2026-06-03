@@ -1916,204 +1916,72 @@
   const AI = {
     PIECE_VALUES: { pawn: 100, knight: 320, bishop: 330, rook: 500, queen: 900, king: 20000 },
 
-    PAWN_TABLE: [
-      [ 0,  0,  0,  0,  0,  0,  0,  0],
-      [50, 50, 50, 50, 50, 50, 50, 50],
-      [10, 10, 20, 30, 30, 20, 10, 10],
-      [ 5,  5, 10, 25, 25, 10,  5,  5],
-      [ 0,  0,  0, 20, 20,  0,  0,  0],
-      [ 5, -5,-10,  0,  0,-10, -5,  5],
-      [ 5, 10, 10,-20,-20, 10, 10,  5],
-      [ 0,  0,  0,  0,  0,  0,  0,  0],
-    ],
+    // ── Stockfish UCI Engine ──────────────────────────────────────
+    _sfWorker:    null,
+    _sfReady:     false,
+    _sfCallbacks: [],   // queue of { resolve } waiting for bestmove
+    _uciReady:    null, // resolve fn waiting for 'uciok'
+    _readyReady:  null, // resolve fn waiting for 'readyok'
 
-    KNIGHT_TABLE: [
-      [-50,-40,-30,-30,-30,-30,-40,-50],
-      [-40,-20,  0,  5,  5,  0,-20,-40],
-      [-30,  5, 10, 15, 15, 10,  5,-30],
-      [-30,  0, 15, 20, 20, 15,  0,-30],
-      [-30,  5, 15, 20, 20, 15,  5,-30],
-      [-30,  0, 10, 15, 15, 10,  0,-30],
-      [-40,-20,  0,  0,  0,  0,-20,-40],
-      [-50,-40,-30,-30,-30,-30,-40,-50],
-    ],
-
-    BISHOP_TABLE: [
-      [-20,-10,-10,-10,-10,-10,-10,-20],
-      [-10,  5,  0,  0,  0,  0,  5,-10],
-      [-10, 10, 10, 10, 10, 10, 10,-10],
-      [-10,  0, 10, 10, 10, 10,  0,-10],
-      [-10,  5,  5, 10, 10,  5,  5,-10],
-      [-10,  0,  5, 10, 10,  5,  0,-10],
-      [-10,  0,  0,  0,  0,  0,  0,-10],
-      [-20,-10,-10,-10,-10,-10,-10,-20],
-    ],
-
-    ROOK_TABLE: [
-      [ 0,  0,  0,  5,  5,  0,  0,  0],
-      [-5,  0,  0,  0,  0,  0,  0, -5],
-      [-5,  0,  0,  0,  0,  0,  0, -5],
-      [-5,  0,  0,  0,  0,  0,  0, -5],
-      [-5,  0,  0,  0,  0,  0,  0, -5],
-      [-5,  0,  0,  0,  0,  0,  0, -5],
-      [ 5, 10, 10, 10, 10, 10, 10,  5],
-      [ 0,  0,  0,  0,  0,  0,  0,  0],
-    ],
-
-    // ── Web Worker for off-thread minimax ──────────────────────
-    // The worker bundles its own copy of chess.js + eval + minimax so the main
-    // thread is never blocked (no more "page unresponsive" popup).
-    _worker:     null,
-    _workerCbs:  [],   // queue of resolve callbacks (one per in-flight search)
-
-    _workerSrc: `
-importScripts('https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.js');
-const PV={p:100,n:320,b:330,r:500,q:900,k:20000};
-const PT=[[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]];
-const NT=[[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,5,5,0,-20,-40],[-30,5,10,15,15,10,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,10,15,15,10,0,-30],[-40,-20,0,0,0,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]];
-const BT=[[-20,-10,-10,-10,-10,-10,-10,-20],[-10,5,0,0,0,0,5,-10],[-10,10,10,10,10,10,10,-10],[-10,0,10,10,10,10,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,5,10,10,5,0,-10],[-10,0,0,0,0,0,0,-10],[-20,-10,-10,-10,-10,-10,-10,-20]];
-const RT=[[0,0,0,5,5,0,0,0],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[5,10,10,10,10,10,10,5],[0,0,0,0,0,0,0,0]];
-function evalPos(cjs){
-  const b=cjs.board(); let s=cjs.moves().length*(cjs.turn()==='b'?3:-3);
-  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
-    const cp=b[r][c]; if(!cp) continue;
-    const blk=cp.color==='b', tr=blk?r:7-r; let v=PV[cp.type]||0;
-    if(cp.type==='p') v+=PT[tr][c]; if(cp.type==='n') v+=NT[tr][c];
-    if(cp.type==='b') v+=BT[tr][c]; if(cp.type==='r') v+=RT[tr][c];
-    s+=blk?v:-v;
-  }
-  return s;
-}
-function mm(cjs,d,a,b,max){
-  const ms=cjs.moves({verbose:true});
-  if(!ms.length) return cjs.in_check()?(max?-50000:50000):0;
-  if(d===0) return evalPos(cjs);
-  if(max){
-    let best=-Infinity;
-    for(const m of ms){const cl=new Chess(cjs.fen());cl.move({from:m.from,to:m.to,promotion:m.promotion||'q'});best=Math.max(best,mm(cl,d-1,a,b,false));a=Math.max(a,best);if(b<=a)break;}
-    return best;
-  }else{
-    let best=Infinity;
-    for(const m of ms){const cl=new Chess(cjs.fen());cl.move({from:m.from,to:m.to,promotion:m.promotion||'q'});best=Math.min(best,mm(cl,d-1,a,b,true));b=Math.min(b,best);if(b<=a)break;}
-    return best;
-  }
-}
-self.onmessage=function(e){
-  const{fen,depth,noise,aiColor}=e.data;
-  // evalPos scores positive when black is winning. Flip sign when AI plays white.
-  const sign=aiColor==='b'?1:-1;
-  const root=new Chess(fen);
-  const moves=root.moves({verbose:true});
-  if(!moves.length){self.postMessage(null);return;}
-  // Shuffle move order so equal-score positions play differently each game
-  for(let i=moves.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=moves[i];moves[i]=moves[j];moves[j]=t;}
-  let best=-Infinity,bestMove=moves[0];
-  for(const m of moves){
-    const cl=new Chess(fen);
-    cl.move({from:m.from,to:m.to,promotion:m.promotion||'q'});
-    // Always add noise — even hard mode gets a small jitter so games differ
-    let sc=sign*mm(cl,depth-1,-Infinity,Infinity,false)+(Math.random()*2-1)*noise;
-    if(sc>best){best=sc;bestMove=m;}
-  }
-  self.postMessage({from:bestMove.from,to:bestMove.to,promotion:bestMove.promotion,flags:bestMove.flags});
-};`,
-
-    _ensureWorker() {
-      if (this._worker) return;
-      const blob = new Blob([this._workerSrc], { type: 'application/javascript' });
-      this._worker = new Worker(URL.createObjectURL(blob));
-      this._worker.onmessage = e => {
-        const resolve = this._workerCbs.shift();
-        if (resolve) resolve(e.data);
-      };
-      this._worker.onerror = err => {
-        console.error('AI worker error:', err.message);
-        const resolve = this._workerCbs.shift();
-        if (resolve) resolve(null); // fall through to fallback
-      };
+    _onSFMessage(line) {
+      if (line === 'uciok' && this._uciReady) {
+        this._uciReady(); this._uciReady = null;
+      } else if (line === 'readyok' && this._readyReady) {
+        this._readyReady(); this._readyReady = null;
+      } else if (line.startsWith('bestmove')) {
+        const cb = this._sfCallbacks.shift();
+        if (cb) cb.resolve(line);
+      }
     },
 
-    // Returns a Promise that resolves with { from, to, flags, promotion } or null
-    _searchAsync(fen, depth, noise) {
+    async _initStockfish() {
+      if (this._sfWorker) return;
+      let workerUrl;
+      if (location.protocol === 'file:') {
+        // file:// can't load a same-origin worker; fetch+blob as fallback
+        const text = await fetch(
+          'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js'
+        ).then(r => r.text());
+        const blob = new Blob([text], { type: 'application/javascript' });
+        workerUrl = URL.createObjectURL(blob);
+      } else {
+        workerUrl = 'stockfish.js';
+      }
+      await new Promise((resolve, reject) => {
+        this._sfWorker = new Worker(workerUrl);
+        this._sfWorker.onmessage = e => this._onSFMessage(e.data);
+        this._sfWorker.onerror = err => {
+          console.error('Stockfish worker error:', err.message);
+          this._sfWorker = null;
+          reject(err);
+        };
+        this._uciReady = resolve;
+        this._sfWorker.postMessage('uci');
+      });
+      await new Promise(resolve => {
+        this._readyReady = resolve;
+        this._sfWorker.postMessage('isready');
+      });
+      this._sfReady = true;
+    },
+
+    // Returns a Promise that resolves with the "bestmove e2e4 ..." line
+    _getBestMove(fen, skillLevel, movetime) {
       return new Promise(resolve => {
-        this._ensureWorker();
-        this._workerCbs.push(resolve);
-        // Pass aiColor so the worker knows whose score to maximize
-        const aiColor = State.aiColor === 'white' ? 'w' : 'b';
-        this._worker.postMessage({ fen, depth, noise, aiColor });
+        this._sfCallbacks.push({ resolve });
+        this._sfWorker.postMessage('setoption name Skill Level value ' + skillLevel);
+        this._sfWorker.postMessage('position fen ' + fen);
+        this._sfWorker.postMessage('go movetime ' + movetime);
       });
     },
 
-    // cjsInst — a ChessLib instance (NOT an 8×8 array)
-    evaluate(cjsInst) {
-      const b = cjsInst.board(); // 8×8: null | { type:'p'|'n'|..., color:'w'|'b' }
-      let score = 0;
-
-      // Mobility for the side to move (positive = good for black)
-      const mobilityCount = cjsInst.moves().length;
-      score += cjsInst.turn() === 'b' ? mobilityCount * 3 : -mobilityCount * 3;
-
-      // Wallet advantage bonus (global state — not affected by tree depth)
-      score += (State.wallets.black - State.wallets.white) * 0.5;
-
-      for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-          const cp = b[r][c];
-          if (!cp) continue;
-          const type  = CJS_TYPE[cp.type];   // e.g. 'p' → 'pawn'
-          const color = cp.color === 'w' ? 'white' : 'black';
-          let val = this.PIECE_VALUES[type] || 0;
-          const tableRow = color === 'black' ? r : 7 - r;
-          if (type === 'pawn')   val += this.PAWN_TABLE[tableRow][c];
-          if (type === 'knight') val += this.KNIGHT_TABLE[tableRow][c];
-          if (type === 'bishop') val += this.BISHOP_TABLE[tableRow][c];
-          if (type === 'rook')   val += this.ROOK_TABLE[tableRow][c];
-          // Buff bonuses — approximate using current State.board; same color guard avoids mismatches
-          const sp = State.board[r][c];
-          if (sp?.color === color) {
-            if (sp.buffs?.some(b => b.kind === 'shield'))       val += 60;
-            if (sp.buffs?.some(b => b.kind === 'mirrorShield')) val += 80;
-            if (sp.buffs?.some(b => b.kind === 'berserk'))      val += 30;
-            if (sp.buffs?.some(b => b.kind === 'empower'))      val += 40;
-          }
-          score += color === 'black' ? val : -val;
-        }
-      }
-      return score;
-    },
-
-    // Alpha-beta minimax over ChessLib instances (no 8×8 array board copies needed)
-    minimax(cjsInst, depth, alpha, beta, maximizing) {
-      const moves = cjsInst.moves({ verbose: true });
-      if (moves.length === 0) {
-        // Checkmate or stalemate
-        return cjsInst.in_check() ? (maximizing ? -50000 : 50000) : 0;
-      }
-      if (depth === 0) return this.evaluate(cjsInst);
-
-      if (maximizing) {
-        let best = -Infinity;
-        for (const m of moves) {
-          const clone = new ChessLib(cjsInst.fen());
-          clone.move({ from: m.from, to: m.to, promotion: m.promotion });
-          const score = this.minimax(clone, depth - 1, alpha, beta, false);
-          best = Math.max(best, score);
-          alpha = Math.max(alpha, best);
-          if (beta <= alpha) break;
-        }
-        return best;
-      } else {
-        let best = Infinity;
-        for (const m of moves) {
-          const clone = new ChessLib(cjsInst.fen());
-          clone.move({ from: m.from, to: m.to, promotion: m.promotion });
-          const score = this.minimax(clone, depth - 1, alpha, beta, true);
-          best = Math.min(best, score);
-          beta = Math.min(beta, best);
-          if (beta <= alpha) break;
-        }
-        return best;
-      }
+    // Parse UCI move string "e2e4" or "e7e8q" → our internal format
+    _uciToMove(uciStr) {
+      if (!uciStr || uciStr === '(none)') return null;
+      const from = fromAlg(uciStr.slice(0, 2));
+      const to   = fromAlg(uciStr.slice(2, 4));
+      const promo = uciStr.length === 5 ? uciStr[4] : null; // 'q','r','n','b'
+      return { fromRow: from.row, fromCol: from.col, row: to.row, col: to.col, promo };
     },
 
     // Find all AI pieces of a given type (or any type if omitted)
@@ -2275,7 +2143,7 @@ self.onmessage=function(e){
       }
     },
 
-    // Async — runs minimax in a Web Worker so the main thread stays responsive.
+    // Async — uses Stockfish UCI engine for strong, responsive AI.
     async takeTurn() {
       const aiColor = State.aiColor;
       if (State.phase !== 'playing' || State.turn !== aiColor) return;
@@ -2289,6 +2157,16 @@ self.onmessage=function(e){
         const from = fromAlg(m.from);
         return !State.board[from.row][from.col]?.buffs?.some(b => b.kind === 'freeze');
       });
+
+      // Helper: convert a chess.js verbose move to our {fromRow,fromCol,row,col,special} format
+      const toOurMove = m => {
+        const from = fromAlg(m.from), to = fromAlg(m.to);
+        let special = null;
+        if      (m.flags.includes('k')) special = 'castleK';
+        else if (m.flags.includes('q')) special = 'castleQ';
+        else if (m.flags.includes('e')) special = 'enPassant';
+        return { fromRow: from.row, fromCol: from.col, row: to.row, col: to.col, special };
+      };
 
       // Gather extraMove-buff squares that chess.js doesn't generate (augmentation only)
       const extraOnlyMoves = [];
@@ -2323,65 +2201,89 @@ self.onmessage=function(e){
         return;
       }
 
-      // Helper: convert a chess.js verbose move to our {fromRow,fromCol,row,col,special} format
-      const toOurMove = m => {
-        const from = fromAlg(m.from), to = fromAlg(m.to);
-        let special = null;
-        if      (m.flags.includes('k')) special = 'castleK';
-        else if (m.flags.includes('q')) special = 'castleQ';
-        else if (m.flags.includes('e')) special = 'enPassant';
-        return { fromRow: from.row, fromCol: from.col, row: to.row, col: to.col, special };
-      };
-
-      let bestMove;
+      let bestMove = null, promoType = null;
 
       if (State.difficulty === 'easy') {
-        // Easy: completely random selection over all legal moves (chess.js + extraMove + leap)
+        // Easy: completely random selection over all legal moves
         const all = [...rawMoves.map(toOurMove), ...extraOnlyMoves, ...leapOnlyMoves];
         bestMove = all[Math.floor(Math.random() * all.length)];
       } else {
-        const depth = State.difficulty === 'hard' ? 3 : 2;
-        const noise = State.difficulty === 'hard' ? 8 : 30; // hard: ±8 jitter, medium: ±30
+        // Medium / Hard: use Stockfish UCI
+        const skillLevel = State.difficulty === 'hard' ? 18 : 8;
+        const movetime   = State.difficulty === 'hard' ? 1200 : 400;
 
-        // Off-thread search — UI stays fully responsive while the worker thinks
-        const result = await this._searchAsync(cjs.fen(), depth, noise);
-
-        // Guard: game might have ended while the worker was thinking
-        if (State.phase !== 'playing' || State.turn !== aiColor) return;
-
-        if (result) {
-          bestMove = toOurMove(result);
+        try {
+          await this._initStockfish();
+        } catch (err) {
+          console.warn('Stockfish init failed, falling back to random:', err);
+          const all = [...rawMoves.map(toOurMove), ...extraOnlyMoves, ...leapOnlyMoves];
+          bestMove = all[Math.floor(Math.random() * all.length)];
         }
 
-        // Prefer an extraMove or leap buff capture of a high-value piece if clearly better
-        for (const em of [...extraOnlyMoves, ...leapOnlyMoves]) {
-          const target = State.board[em.row][em.col];
-          if (target && this.PIECE_VALUES[target.type] >= 500) { bestMove = em; break; }
+        if (!bestMove && this._sfReady) {
+          let uciLine = null;
+          try {
+            uciLine = await this._getBestMove(cjs.fen(), skillLevel, movetime);
+          } catch (err) {
+            console.warn('Stockfish search failed:', err);
+          }
+
+          // Guard: game might have ended while Stockfish was thinking
+          if (State.phase !== 'playing' || State.turn !== aiColor) return;
+
+          if (uciLine && uciLine.startsWith('bestmove')) {
+            const uciMove = uciLine.split(' ')[1]; // e.g. "e2e4" or "e7e8q"
+            if (uciMove && uciMove !== '(none)') {
+              const parsed = this._uciToMove(uciMove);
+              if (parsed) {
+                // Reject the move if that piece is frozen
+                const isFrozen = State.board[parsed.fromRow][parsed.fromCol]
+                  ?.buffs?.some(b => b.kind === 'freeze') ?? false;
+                if (!isFrozen) {
+                  bestMove = parsed;
+                  if (parsed.promo) {
+                    const pm = { q: 'queen', r: 'rook', n: 'knight', b: 'bishop' };
+                    promoType = pm[parsed.promo] || 'queen';
+                  }
+                }
+              }
+            }
+          }
+
+          // Grab an extraMove/leap capture of a high-value piece if available
+          for (const em of [...extraOnlyMoves, ...leapOnlyMoves]) {
+            const target = State.board[em.row][em.col];
+            if (target && this.PIECE_VALUES[target.type] >= 500) {
+              bestMove = em; promoType = null; break;
+            }
+          }
         }
 
-        // Fallback if worker returned null (no legal moves, shouldn't happen)
-        if (!bestMove && rawMoves.length > 0) bestMove = toOurMove(rawMoves[0]);
+        // Fallback: first legal move if Stockfish gave nothing useful
+        if (!bestMove) {
+          if (rawMoves.length > 0)          bestMove = toOurMove(rawMoves[0]);
+          else if (extraOnlyMoves.length > 0) bestMove = extraOnlyMoves[0];
+          else if (leapOnlyMoves.length > 0)  bestMove = leapOnlyMoves[0];
+        }
       }
 
       if (!bestMove) { setTimeout(() => Game.endTurn(), 300); return; }
 
-      // Fix 1 — anti-oscillation: avoid immediately reversing the last AI move
-      // (prevents a rook trapped in a 2-square corridor from ping-ponging forever)
+      // Anti-oscillation: avoid immediately reversing the last AI move
       if (State.lastAIMove && bestMove) {
         const last = State.lastAIMove;
         const isReverse = bestMove.fromRow === last.row && bestMove.fromCol === last.col &&
                           bestMove.row === last.fromRow && bestMove.col === last.fromCol;
         if (isReverse) {
-          // Pick any other move that isn't the reverse; prefer a non-same-piece move first
           const alternatives = rawMoves.map(toOurMove).filter(m =>
             !(m.fromRow === bestMove.fromRow && m.fromCol === bestMove.fromCol &&
               m.row === bestMove.row && m.col === bestMove.col)
           );
           if (alternatives.length > 0) {
-            // Prefer moves from a different piece; fall back to any alternative
             const diffPiece = alternatives.filter(m => m.fromRow !== last.row || m.fromCol !== last.col);
             const pool = diffPiece.length > 0 ? diffPiece : alternatives;
             bestMove = pool[Math.floor(Math.random() * Math.min(3, pool.length))];
+            promoType = null;
           }
         }
       }
@@ -2390,17 +2292,23 @@ self.onmessage=function(e){
       const movesBefore = State.movesMadeThisTurn;
       Game.executeMove(fromRow, fromCol, row, col, special);
 
+      // Auto-resolve promotion modal when AI promotes a pawn
+      if (UI._pendingPromotion) {
+        UI.resolvePromotion(promoType || 'queen');
+      }
+
       // Record last AI move for oscillation detection next turn
       if (State.movesMadeThisTurn > movesBefore) {
         State.lastAIMove = { fromRow, fromCol, row, col };
       }
 
-      // If shield absorbed the move, try a fallback from the chess.js move list
+      // If shield absorbed the move, try a fallback from the legal move list
       if (State.movesMadeThisTurn === movesBefore) {
         for (const m of rawMoves) {
           const fb = toOurMove(m);
           if (fb.row === row && fb.col === col) continue; // skip the shielded target
           Game.executeMove(fb.fromRow, fb.fromCol, fb.row, fb.col, fb.special);
+          if (UI._pendingPromotion) UI.resolvePromotion('queen');
           if (State.movesMadeThisTurn > movesBefore) {
             State.lastAIMove = { fromRow: fb.fromRow, fromCol: fb.fromCol, row: fb.row, col: fb.col };
             break;
