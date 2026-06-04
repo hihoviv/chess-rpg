@@ -373,7 +373,7 @@
           </table>
 
           <div class="help-h2">THE SHOP</div>
-          <p class="help-rule">Each turn you get <b>3 EQUIPMENT</b> items and <b>3 EXCLUSIVES</b> drawn from the full pool at random.</p>
+          <p class="help-rule">Each turn you get <b>6 items</b> drawn at random. Each slot has a <b>10% chance</b> to be a rare <b style="color:#c060ff">EXCLUSIVE</b> (board-wide effect) — otherwise it's standard equipment.</p>
           <p class="help-rule">Click an item to target a piece (or apply instantly for board effects).</p>
           <p class="help-rule">Each item can only be bought once per roll — rerolling restocks all slots.</p>
           <p class="help-rule">You can only shop on your own turn.</p>
@@ -492,7 +492,7 @@
       <!-- ── EXCLUSIVES ── -->
       <div class="help-pane" id="help-pane-exclusives">
         <div class="help-scroll">
-          <p class="help-p" style="margin-bottom:8px;">Exclusives are <b>board-wide effects</b> that apply instantly — no targeting required. Only 3 are offered per turn, drawn randomly.</p>
+          <p class="help-p" style="margin-bottom:8px;">Exclusives are <b>board-wide effects</b> that apply instantly — no targeting required. Each shop slot has a <b>10% chance</b> to roll an exclusive, so they appear rarely and unpredictably.</p>
           <div class="help-items">
             <div class="help-item special">
               <div class="help-item-top"><span class="help-item-name">COIN BOOST</span><span class="help-item-cost">100g</span></div>
@@ -604,10 +604,8 @@
               <h3 id="shop-title">🛒 SHOP</h3>
               <button id="btn-reroll" disabled>🎲 REROLL (10g)</button>
             </div>
-            <div class="shop-section-label">— EQUIPMENT —</div>
+            <div class="shop-section-label">— ITEMS —</div>
             <div class="shop-grid" id="shop-grid-classic"><!-- Populated by JS --></div>
-            <div class="shop-section-label special">— EXCLUSIVES —</div>
-            <div class="shop-grid" id="shop-grid-special"><!-- Populated by JS --></div>
           </div>
         </div>
 
@@ -1550,7 +1548,6 @@
 
     updateShop() {
       const classicGrid = document.getElementById('shop-grid-classic');
-      const specialGrid = document.getElementById('shop-grid-special');
       const wallet = State.wallets[State.turn];
       const isHumanTurn = State.mode === 'twoPlayer' || State.turn === State.humanColor;
       const playerShop = State.shop[State.turn] || { classic: [], special: [] };
@@ -1570,42 +1567,40 @@
 
       const coinIcon = `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ffe066,#c8960c);border:1px solid #7a5e00;vertical-align:middle"></span>`;
 
-      const renderGrid = (grid, items, isSpecial) => {
-        grid.innerHTML = '';
-        for (const item of items) {
-          const div = document.createElement('div');
-          const isSold = item.purchased;
-          const canAfford = !isSold && isHumanTurn && wallet >= item.cost;
-          const isSelected = State.pendingUpgrade === item.kind;
-          div.className = 'shop-item' + (isSpecial ? ' special-item' : '') +
-            (isSold ? ' sold' : canAfford ? '' : ' disabled') + (isSelected ? ' selected' : '');
-          div.innerHTML =
-            `<div class="item-cat${isSpecial ? ' special' : ''}">${item.cat}</div>` +
-            `<div class="item-name">${item.label}</div>` +
-            `<div class="item-desc">${item.desc}</div>` +
-            `<div class="item-cost">${isSold ? 'SOLD' : coinIcon + ' ' + item.cost + 'g'}</div>`;
-          if (canAfford && !isSold) {
-            div.addEventListener('click', () => {
-              item.purchased = true;  // consume the slot immediately — prevents double-buy
-              if (item.target === 'board' || item.target === 'square') {
-                Economy.applyBoardUpgrade(item.kind);
-                UI.updateHUD();
-                UI.updateShop();
-              } else {
-                State.pendingUpgrade = item.kind;
-                UI.updateShop();
-                if (item.kind === 'freeze') UI.setStatus('FREEZE: Click an enemy piece to freeze it for 3 turns.');
-                else if (item.kind === 'leap') UI.setStatus('LEAP: Click one of your pieces to grant it the Leap ability.');
-                else UI.setStatus('Click one of your pieces to apply ' + item.label + '.');
-              }
-            });
-          }
-          grid.appendChild(div);
+      // All items live in a single unified grid; exclusives detected per-item
+      const allItems = [...(playerShop.classic || []), ...(playerShop.special || [])];
+      classicGrid.innerHTML = '';
+      for (const item of allItems) {
+        const isSpecial = item.target === 'board' || item.target === 'square';
+        const div = document.createElement('div');
+        const isSold = item.purchased;
+        const canAfford = !isSold && isHumanTurn && wallet >= item.cost;
+        const isSelected = State.pendingUpgrade === item.kind;
+        div.className = 'shop-item' + (isSpecial ? ' special-item' : '') +
+          (isSold ? ' sold' : canAfford ? '' : ' disabled') + (isSelected ? ' selected' : '');
+        div.innerHTML =
+          `<div class="item-cat${isSpecial ? ' special' : ''}">${item.cat}</div>` +
+          `<div class="item-name">${item.label}</div>` +
+          `<div class="item-desc">${item.desc}</div>` +
+          `<div class="item-cost">${isSold ? 'SOLD' : coinIcon + ' ' + item.cost + 'g'}</div>`;
+        if (canAfford && !isSold) {
+          div.addEventListener('click', () => {
+            item.purchased = true;  // consume the slot — prevents double-buy
+            if (item.target === 'board' || item.target === 'square') {
+              Economy.applyBoardUpgrade(item.kind);
+              UI.updateHUD();
+              UI.updateShop();
+            } else {
+              State.pendingUpgrade = item.kind;
+              UI.updateShop();
+              if (item.kind === 'freeze') UI.setStatus('FREEZE: Click an enemy piece to freeze it for 3 turns.');
+              else if (item.kind === 'leap') UI.setStatus('LEAP: Click one of your pieces to grant it the Leap ability.');
+              else UI.setStatus('Click one of your pieces to apply ' + item.label + '.');
+            }
+          });
         }
-      };
-
-      renderGrid(classicGrid, playerShop.classic, false);
-      renderGrid(specialGrid, playerShop.special, true);
+        classicGrid.appendChild(div);
+      }
     },
 
     setStatus(msg) {
@@ -1647,12 +1642,24 @@
     ],
 
     rollShop(color) {
-      // Shuffle classic pool and pick 3; each item gets a fresh `purchased` flag
-      const classic = [...this.POOL_CLASSIC].sort(() => Math.random() - 0.5).slice(0, 3)
-        .map(item => ({ ...item, purchased: false }));
-      const special = [...this.POOL_SPECIAL].sort(() => Math.random() - 0.5).slice(0, 3)
-        .map(item => ({ ...item, purchased: false }));
-      State.shop[color] = { classic, special };
+      // Each of 6 slots has a 10% chance to be an exclusive (board-wide effect).
+      // Shuffle both pools independently to avoid duplicates within a roll.
+      const classicPool = [...this.POOL_CLASSIC].sort(() => Math.random() - 0.5);
+      const specialPool = [...this.POOL_SPECIAL].sort(() => Math.random() - 0.5);
+      let ci = 0, si = 0;
+      const items = [];
+      for (let i = 0; i < 6; i++) {
+        const tryExclusive = Math.random() < 0.10 && si < specialPool.length;
+        if (tryExclusive) {
+          items.push({ ...specialPool[si++], purchased: false });
+        } else if (ci < classicPool.length) {
+          items.push({ ...classicPool[ci++], purchased: false });
+        } else if (si < specialPool.length) {
+          // Classic pool exhausted — fall back to exclusive
+          items.push({ ...specialPool[si++], purchased: false });
+        }
+      }
+      State.shop[color] = { classic: items, special: [] };
     },
 
     rerollShop() {
